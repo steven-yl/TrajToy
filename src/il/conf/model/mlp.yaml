@@ -1,0 +1,7 @@
+history_state_dim: 7
+road_feature_dim: 2
+hidden_dim: 128
+num_encoder_layers: 2
+num_decoder_layers: 2
+num_heads: 4
+dropout: 0.1

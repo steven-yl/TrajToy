@@ -1,0 +1,6 @@
+input_dir: ${creator.output_dir}
+output_dir: ${creator.output_dir}
+history_len: 5
+future_len: 20
+sample_interval: 5
+fmt: pkl

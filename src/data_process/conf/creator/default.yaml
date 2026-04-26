@@ -1,0 +1,7 @@
+num_episodes: 50
+max_steps_per_episode: 10000
+save_interval: 1
+num_workers: 1
+output_dir: ${hydra:runtime.output_dir}
+output_format: pkl   # pkl / json
+parallel: true        # true=并行, false=串行

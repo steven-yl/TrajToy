@@ -1,0 +1,4 @@
+loss_type: huber
+huber_delta: 1.0
+ade_weight: 1.0
+fde_weight: 0.5

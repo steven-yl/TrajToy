@@ -1,0 +1,33 @@
+# Build output
+dist/
+build/
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+
+# Coverage
+coverage/
+
+# Python
+__pycache__/
+/data/
+/log/
+.kiro/
+.pytest_cache/
+*.egg-info/
