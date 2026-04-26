@@ -12,6 +12,7 @@ dependencies = [
     "numpy",
     "torch",
     "gymnasium",
+    "pygame",
     "casadi",
     "matplotlib",
     "tqdm",
