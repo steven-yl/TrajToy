@@ -10,8 +10,8 @@ defaults:
   - model: mlp
   - loss: mse
   - log: default
-  - env: default
-  - controller: default
+  - env: eval_env
+  - controller: mpc
   - _self_
 
 device: cpu
@@ -26,3 +26,6 @@ train:
   lr_gamma: 0.5
   warmup_steps: 500
   max_grad_norm: 1.0
+
+eval:
+  checkpoint_path: log/il_20260426_171208/best_model.pt

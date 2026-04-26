@@ -1,4 +1,5 @@
-data_dir: data/20260426_113620/preprocessed
+data_dirs:
+  - data/20260426_162240/preprocessed
 train_ratio: 0.8
 val_ratio: 0.1
 history_len: 5

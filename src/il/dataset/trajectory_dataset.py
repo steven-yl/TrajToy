@@ -86,8 +86,24 @@ class TrajectoryDataset(Dataset):
 
     def __init__(self, cfg: DictConfig) -> None:
         self._dc = cfg.data
-        self._data_dir = Path(self._dc.data_dir)
-        self._file_list = sorted(self._data_dir.glob("*.pkl")) if self._data_dir.exists() else []
+        data_dirs = self._resolve_data_dirs()
+        files: list[Path] = []
+        for data_dir in data_dirs:
+            if data_dir.exists():
+                files.extend(sorted(data_dir.glob("*.pkl")))
+        self._data_dirs = data_dirs
+        self._file_list = sorted(files)
+
+    def _resolve_data_dirs(self) -> list[Path]:
+        """兼容单目录与多目录配置，统一返回目录列表。"""
+        if "data_dirs" in self._dc and self._dc.data_dirs is not None:
+            raw_dirs = self._dc.data_dirs
+        elif "data_dir" in self._dc and self._dc.data_dir is not None:
+            raw_dirs = [self._dc.data_dir]
+        else:
+            raise ValueError("缺少数据目录配置：请设置 data.data_dirs 或 data.data_dir")
+
+        return [Path(str(d)) for d in raw_dirs]
 
     def __len__(self) -> int:
         return len(self._file_list)
@@ -209,7 +225,11 @@ def create_dataloaders(cfg: DictConfig):
     ds = TrajectoryDataset(cfg)
     total = len(ds)
     if total == 0:
-        raise ValueError(f"数据目录 {cfg.data.data_dir} 中没有找到 pkl 文件")
+        if "data_dirs" in cfg.data and cfg.data.data_dirs is not None:
+            configured_dirs = list(cfg.data.data_dirs)
+        else:
+            configured_dirs = [cfg.data.data_dir]
+        raise ValueError(f"数据目录 {configured_dirs} 中没有找到 pkl 文件")
 
     dc = cfg.data
     t_end = int(total * dc.train_ratio)

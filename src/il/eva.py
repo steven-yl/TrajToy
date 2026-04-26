@@ -137,16 +137,9 @@ def _predict_ref_path(
 
 
 def _load_il_model(cfg: DictConfig) -> TrajectoryPredictor:
-    ckpt_dir = Path(cfg.log.save_dir)
-    best_ckpt = ckpt_dir / "best_model.pt"
-    final_ckpt = ckpt_dir / "final_model.pt"
-    ckpt_path = best_ckpt if best_ckpt.exists() else final_ckpt
+    ckpt_path = Path(cfg.eval.checkpoint_path)
     if not ckpt_path.exists():
-        raise FileNotFoundError(
-            f"未找到 checkpoint: {best_ckpt} 或 {final_ckpt}。\n"
-            "请在运行评估时显式指定已训练模型目录，例如：\n"
-            "python -m il.eva log.save_dir=log/il_YYYYMMDD_HHMMSS"
-        )
+        raise FileNotFoundError(f"未找到 checkpoint: {ckpt_path}")
 
     device = torch.device(cfg.device)
     model = TrajectoryPredictor(cfg).to(device)
@@ -293,6 +286,7 @@ def _run_single_episode(
                 overlays=overlays,
             )
         if terminated or truncated:
+            print(f"terminated={terminated}, truncated={truncated}")
             break
 
     return ep_ret, final_progress, steps

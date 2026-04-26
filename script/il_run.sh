@@ -11,7 +11,7 @@ case "$1" in
         python -m il.train
         ;;
     close_eval)
-        python -m il.eval
+        python -m il.eva env=eval_env controller=mpc
         ;;
     showcfg)
         python -m il.train --cfg job
