@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import pickle
+import warnings
 from pathlib import Path
 
 import numpy as np
@@ -47,25 +48,54 @@ def _pad_or_truncate_2d(arr: np.ndarray | None, n: int) -> np.ndarray:
     return out
 
 
-def _pad_or_truncate_mask(m: np.ndarray | None, n: int) -> np.ndarray:
+def _pad_or_truncate_mask(m: np.ndarray | None, n: int, from_tail: bool = False) -> np.ndarray:
     if m is None or m.size == 0:
         return np.zeros(n, dtype=np.bool_)
     m = m.astype(np.bool_)
     if m.shape[0] >= n:
-        return m[:n]
+        return m[-n:] if from_tail else m[:n]
     out = np.zeros(n, dtype=np.bool_)
-    out[:m.shape[0]] = m
+    if from_tail:
+        out[-m.shape[0]:] = m
+    else:
+        out[:m.shape[0]] = m
     return out
 
 
-def _pad_or_truncate_seq(arr: np.ndarray, n: int) -> np.ndarray:
+def _pad_or_truncate_seq(arr: np.ndarray, n: int, from_tail: bool = False) -> np.ndarray:
     """按时间维对序列做 pad / truncate，保留特征维。"""
     arr = arr.astype(np.float32)
     if arr.shape[0] >= n:
-        return arr[:n]
+        return arr[-n:] if from_tail else arr[:n]
     out = np.zeros((n, *arr.shape[1:]), dtype=np.float32)
-    out[:arr.shape[0]] = arr
+    if from_tail:
+        out[-arr.shape[0]:] = arr
+    else:
+        out[:arr.shape[0]] = arr
     return out
+
+
+def _sample_sequence_with_interval(
+    arr: np.ndarray | None,
+    mask: np.ndarray | None,
+    interval: int,
+    from_tail: bool,
+) -> tuple[np.ndarray | None, np.ndarray | None]:
+    """按时间间隔采样序列和 mask。from_tail=True 用于历史序列保留最近时刻。"""
+    stride = max(1, int(interval))
+    if stride == 1:
+        return arr, mask
+    if arr is not None and arr.size > 0:
+        if from_tail:
+            arr = arr[::-1][::stride][::-1]
+        else:
+            arr = arr[::stride]
+    if mask is not None and mask.size > 0:
+        if from_tail:
+            mask = mask[::-1][::stride][::-1]
+        else:
+            mask = mask[::stride]
+    return arr, mask
 
 
 # ── Dataset ──────────────────────────────────────────────────────────
@@ -86,6 +116,8 @@ class TrajectoryDataset(Dataset):
 
     def __init__(self, cfg: DictConfig) -> None:
         self._dc = cfg.data
+        # self._history_len_warned = False
+        # self._future_len_warned = False
         data_dirs = self._resolve_data_dirs()
         files: list[Path] = []
         for data_dir in data_dirs:
@@ -120,14 +152,45 @@ class TrajectoryDataset(Dataset):
         # 将序列严格对齐到配置长度，避免模型输出步长与标签步长不一致。
         history_len = int(dc.history_len) + 1
         future_len = int(dc.future_len)
+        history_interval = int(dc.get("history_interval", 1))
+        future_interval = int(dc.get("future_interval", 1))
+        preprocess_history_len = int(s.history_states.shape[0] - 1) if s.history_states is not None else -1
+        preprocess_future_len = int(s.future_states.shape[0]) if s.future_states is not None else -1
+        # if preprocess_history_len >= 0 and preprocess_history_len != int(dc.history_len) and not self._history_len_warned:
+        #     warnings.warn(
+        #         (
+        #             "检测到 preprocess history_len 与 il history_len 不一致："
+        #             f"preprocess={preprocess_history_len}, il={int(dc.history_len)}。"
+        #             "将按 il 配置截断为最近历史帧。"
+        #         ),
+        #         stacklevel=2,
+        #     )
+        #     self._history_len_warned = True
+        # if preprocess_future_len >= 0 and preprocess_future_len != int(dc.future_len) and not self._future_len_warned:
+        #     warnings.warn(
+        #         (
+        #             "检测到 preprocess future_len 与 il future_len 不一致："
+        #             f"preprocess={preprocess_future_len}, il={int(dc.future_len)}。"
+        #             "将按 il 配置截断/补齐未来序列。"
+        #         ),
+        #         stacklevel=2,
+        #     )
+        #     self._future_len_warned = True
 
-        history = _pad_or_truncate_seq(s.history_states, history_len)
-        history_mask = _pad_or_truncate_mask(s.history_mask, history_len)
+        hist_raw, hist_mask_raw = _sample_sequence_with_interval(
+            s.history_states, s.history_mask, history_interval, from_tail=True,
+        )
+        fut_raw, fut_mask_raw = _sample_sequence_with_interval(
+            s.future_states, s.future_mask, future_interval, from_tail=False,
+        )
+
+        history = _pad_or_truncate_seq(hist_raw, history_len, from_tail=True)
+        history_mask = _pad_or_truncate_mask(hist_mask_raw, history_len, from_tail=True)
         ego_xy = history[-1, :2].copy()
         ego_theta = float(history[-1, 2])
 
-        future = _pad_or_truncate_seq(s.future_states, future_len)
-        future_mask = _pad_or_truncate_mask(s.future_mask, future_len)
+        future = _pad_or_truncate_seq(fut_raw, future_len)
+        future_mask = _pad_or_truncate_mask(fut_mask_raw, future_len)
 
         if dc.use_local_coords:
             history = self._to_local_history(history, ego_xy, ego_theta)

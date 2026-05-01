@@ -1,5 +1,5 @@
 dt: 0.1
-max_steps: 100
+max_steps: 200
 init_speed: 5.0
 init_lateral_offset: 0.0
 init_heading_offset: 0.0

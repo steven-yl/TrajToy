@@ -1,7 +1,7 @@
 input_dir: ${creator.output_dir}
 output_dir: ${creator.output_dir}
-history_len: 5
-future_len: 20
+history_len: 20 
+future_len: 80 
 history_future_dt: 0.1
 sample_interval: 5
 fmt: pkl
