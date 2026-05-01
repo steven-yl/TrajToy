@@ -1,31 +1,15 @@
+app:
+  name: il
+  selected_training: ${hydra:runtime.choices.training}
+  log_root: log
+
 hydra:
   run:
-    dir: log/il_${now:%Y%m%d_%H%M%S}
+    dir: ${app.log_root}/${app.name}_${app.selected_training}_${now:%Y%m%d_%H%M%S}
   sweep:
-    dir: log/il_${now:%Y%m%d_%H%M%S}
+    dir: ${app.log_root}/${app.name}_${app.selected_training}_${now:%Y%m%d_%H%M%S}
     subdir: ${hydra.job.num}
-  
+
 defaults:
-  - data: default
-  - model: mlp
-  - loss: mse
-  - log: default
-  - env: eval_env
-  - controller: mpc
+  - training: train_mlp   # train_mlp / eval_mlp_open / eval_mlp_close / train_df
   - _self_
-
-device: cpu
-
-
-train:
-  num_epochs: 100
-  learning_rate: 1e-3
-  weight_decay: 1e-4
-  lr_scheduler: cosine
-  lr_step_size: 30
-  lr_gamma: 0.5
-  warmup_steps: 500
-  max_grad_norm: 1.0
-
-eval:
-  checkpoint_path: log/il_20260426_171208/best_model.pt

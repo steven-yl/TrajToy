@@ -1,0 +1,16 @@
+
+defaults:
+  - /data: default
+  - /model: mlp
+  - /log: default
+  - /env: eval_env
+  - /controller: mpc
+  - _self_
+
+device: cpu
+
+trainer:
+  _target_: il.training.mlp_close_eval.MLPCloseEvaluator
+  _convert_: "all"
+
+  checkpoint_path: log/il_train_mlp_20260430_183851/best_model.pt

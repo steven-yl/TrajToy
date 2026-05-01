@@ -11,12 +11,15 @@ requires-python = ">=3.10"
 dependencies = [
     "numpy",
     "torch",
+    "accelerate",
+    "einops",
     "gymnasium",
     "pygame",
     "casadi",
     "matplotlib",
     "tqdm",
     "tensorboard",
+    "torch-ema",
     "hydra-core>=1.3",
     "omegaconf>=2.3",
 ]

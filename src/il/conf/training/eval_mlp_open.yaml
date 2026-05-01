@@ -1,0 +1,13 @@
+defaults:
+  - /data: default
+  - /model: mlp
+  - /log: default
+  - _self_
+
+device: cpu
+
+trainer:
+  _target_: il.training.mlp_close_eval.MLPCloseEvaluator
+  _convert_: "all"
+
+  checkpoint_path: log/il_mlp_train_20260430_160248/best_model.pt

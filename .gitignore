@@ -31,3 +31,4 @@ __pycache__/
 .kiro/
 .pytest_cache/
 *.egg-info/
+/checkpoint/

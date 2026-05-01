@@ -1,6 +1,6 @@
 dt: 0.1
 max_steps: 5000
-init_speed: 5.0
+init_speed: 0.0
 init_lateral_offset: 0.0
 init_heading_offset: 0.0
 
@@ -36,8 +36,8 @@ road_config:
   loop_segments: true
   num_random_segments: 3
   segment_weights:
-    STRAIGHT: 3.0
-    CURVE: 7.0
+    STRAIGHT: 5.0
+    CURVE: 3.0
     INTERSECTION: 0.0
     SPLIT: 0.0
     MERGE: 0.0
@@ -63,3 +63,4 @@ vehicle_config:
     rear_overhang: 1.2
     mass: 1500.0
     drag_coeff: 0.3
+

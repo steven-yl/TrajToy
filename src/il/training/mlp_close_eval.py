@@ -17,6 +17,7 @@ from omegaconf import DictConfig, OmegaConf
 from il.model import TrajectoryPredictor
 from sim_env.road_vehicle_env import RoadVehicleEnv
 from sim_env.vehicle_controller import VehicleMPC
+from .trainer import TrainerBase
 
 
 def _to_local_coords(points: np.ndarray, origin: np.ndarray, theta: float) -> np.ndarray:
@@ -63,10 +64,16 @@ def _build_model_inputs(
     road_mask = np.zeros(n_points, dtype=np.float32)
     road_mask[:actual_len] = 1.0
 
-    centerline_mask = road_mask.copy()
+    centerline_mask = road_mask.copy() * 0.0
     left_boundary_mask = road_mask.copy()
     right_boundary_mask = road_mask.copy() 
-    lane_dividers_mask = np.tile(road_mask[None, :], (n_dividers, 1)) * 0.0
+    lane_dividers_mask = np.tile(road_mask[None, :], (n_dividers, 1))
+
+    # 限速条件：优先取环境提供的 max_v；缺失时使用保守默认值 30.0 m/s。
+    max_v = np.zeros(n_points, dtype=np.float32)
+    max_v[:actual_len] = cfg.env.reward_config.target_speed
+    max_v_mask = np.zeros(n_points, dtype=np.float32)
+    max_v_mask[:actual_len] = 1.0
 
     if bool(dc.use_local_coords):
         ego_xy = history[-1, :2].copy()
@@ -93,6 +100,8 @@ def _build_model_inputs(
         "right_boundary_mask": right_boundary_mask,
         "lane_dividers": lane_dividers,
         "lane_dividers_mask": lane_dividers_mask,
+        "max_v": max_v,
+        "max_v_mask": max_v_mask,
         "ego_pose_world": np.array([ego_xy_world[0], ego_xy_world[1], ego_theta_world], dtype=np.float32),
     }
 
@@ -114,11 +123,18 @@ def _predict_ref_path(
     with torch.no_grad():
         batch = _build_torch_batch(model_inputs, device)
         pred = model(
-            batch["history"], batch["history_mask"],
-            batch["centerline"], batch["centerline_mask"],
-            batch["left_boundary"], batch["left_boundary_mask"],
-            batch["right_boundary"], batch["right_boundary_mask"],
-            batch["lane_dividers"], batch["lane_dividers_mask"],
+            history=batch["history"],
+            history_mask=batch["history_mask"],
+            centerline=batch["centerline"],
+            centerline_mask=batch["centerline_mask"],
+            left_boundary=batch["left_boundary"],
+            left_boundary_mask=batch["left_boundary_mask"],
+            right_boundary=batch["right_boundary"],
+            right_boundary_mask=batch["right_boundary_mask"],
+            lane_dividers=batch["lane_dividers"],
+            lane_dividers_mask=batch["lane_dividers_mask"],
+            max_v=batch["max_v"],
+            max_v_mask=batch["max_v_mask"],
         ).squeeze(0).cpu().numpy()
 
     pred_xy = pred[:, :2]
@@ -137,7 +153,7 @@ def _predict_ref_path(
 
 
 def _load_il_model(cfg: DictConfig) -> TrajectoryPredictor:
-    ckpt_path = Path(cfg.eval.checkpoint_path)
+    ckpt_path = Path(cfg.trainer.checkpoint_path)
     if not ckpt_path.exists():
         raise FileNotFoundError(f"未找到 checkpoint: {ckpt_path}")
 
@@ -311,10 +327,10 @@ def evaluate_closed_loop(cfg: DictConfig) -> None:
     print(f"steps    : {steps}")
 
 
-@hydra.main(version_base=None, config_path="conf", config_name="config")
-def main(cfg: DictConfig) -> None:
-    evaluate_closed_loop(cfg)
+class MLPCloseEvaluator(TrainerBase):
+    """基于 TrainerBase 的闭环评估入口。"""
 
+    def run(self) -> None:
+        cfg = self.cfg.training if "training" in self.cfg else self.cfg
+        evaluate_closed_loop(cfg)
 
-if __name__ == "__main__":
-    main()

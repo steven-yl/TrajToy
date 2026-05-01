@@ -63,7 +63,7 @@ def _pad_or_truncate_seq(arr: np.ndarray, n: int) -> np.ndarray:
     arr = arr.astype(np.float32)
     if arr.shape[0] >= n:
         return arr[:n]
-    out = np.zeros((n, arr.shape[1]), dtype=np.float32)
+    out = np.zeros((n, *arr.shape[1:]), dtype=np.float32)
     out[:arr.shape[0]] = arr
     return out
 
@@ -145,12 +145,8 @@ class TrajectoryDataset(Dataset):
         else:
             vp_arr = np.zeros(11, dtype=np.float32)
 
-        valid_future = future_mask
-        max_v_mask = np.array(np.any(valid_future), dtype=np.bool_)
-        if np.any(valid_future):
-            max_v = np.array(float(np.max(future[valid_future, 3])), dtype=np.float32)
-        else:
-            max_v = np.array(0.0, dtype=np.float32)
+        max_v = _pad_or_truncate_seq(s.centerline_max_v, self._dc.road_points)
+        max_v_mask = _pad_or_truncate_mask(s.centerline_max_v_mask, self._dc.road_points)
 
         return {
             "vehicle_params": torch.from_numpy(vp_arr),

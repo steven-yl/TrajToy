@@ -1,0 +1,17 @@
+defaults:
+  - /data: default
+  - /model: C1DUnet
+  - /log: default
+  - _self_
+
+device: cpu
+
+trainer:
+  _target_: il.training.df_train.DFTrainer
+  _convert_: "all"
+
+train:
+  num_epochs: 1000
+  learning_rate: 2e-4
+  sample_batch_size: 64
+  checkpoint_path: checkpoint.pth

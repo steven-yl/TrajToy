@@ -116,7 +116,8 @@ def _run_single_episode(episode_id, cfg, env, controller) -> EpisodeData:
 
     default_action = np.array([0.0, 0.0])
 
-    dt = float(env.config.dt)
+    env_dt = float(env.config.dt)
+    frame_dt = env_dt * int(cfg.save_interval)
 
     if env.config.random_init and hasattr(env.config.random_config, "random_target_speed_range"):
         low, high = env.config.random_config.random_target_speed_range
@@ -144,7 +145,7 @@ def _run_single_episode(episode_id, cfg, env, controller) -> EpisodeData:
             frame = FrameData(
                 episode_id=episode_id,
                 step=step,
-                timestamp=step * dt,
+                timestamp=step * env_dt,
                 x=info["x"], y=info["y"], theta=info["theta"],
                 v=info["v"], steering=info.get("steering", 0.0),
                 action_accel=float(action[0]),
@@ -183,7 +184,7 @@ def _run_single_episode(episode_id, cfg, env, controller) -> EpisodeData:
         frames=frames,
         vehicle_params=env._vehicle.params,
         timestamp=timestamp,
-        dt=dt,
+        dt=frame_dt,
     )
 
 
@@ -255,8 +256,6 @@ class DataCreatorConfig:
     output_dir: str = "data/output"
     output_format: str = "pkl"
     parallel: bool = True
-    # env
-    dt: float = 0.1
 
 class DataCreator:
     """数据生产器。"""
@@ -278,9 +277,9 @@ class DataCreator:
 
     def create_data(self) -> ProductionReport:
         if self.config.parallel:
-            self.run_parallel()
+            return self.run_parallel()
         else:
-            self.run_serial()
+            return self.run_serial()
 
 
     def run_serial(self) -> ProductionReport:
@@ -337,6 +336,10 @@ class DataCreator:
 
         total_frames = sum(len(ep.frames) for ep in episodes)
         n = len(episodes)
+        episode_dts = [float(ep.dt) for ep in episodes if ep is not None]
+        report_dt = episode_dts[0] if episode_dts else self.env.config.dt * self.config.save_interval
+        if episode_dts and any(abs(v - report_dt) > 1e-12 for v in episode_dts[1:]):
+            raise ValueError(f"检测到不一致的 episode.dt: {sorted(set(episode_dts))}")
         report = ProductionReport(
             total_episodes=n,
             total_frames=total_frames,
@@ -351,7 +354,7 @@ class DataCreator:
             output_format=self.config.output_format,
             episode_files=episode_files,
             created_at=datetime.now().isoformat(),
-            dt=self.config.dt,
+            dt=report_dt,
         )
 
         report_path = os.path.join(self.config.output_dir, "creator_report.json")

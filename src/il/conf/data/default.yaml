@@ -1,11 +1,12 @@
 data_dirs:
-  - data/20260426_162240/preprocessed
-train_ratio: 0.8
-val_ratio: 0.1
+  # - data/20260430_160136/preprocessed
+  - data/20260430_180955/preprocessed
+train_ratio: 0.6
+val_ratio: 0.2
 history_len: 5
 future_len: 10
 road_points: 20
-num_lane_dividers: 1
+num_lane_dividers: 3
 use_local_coords: true
 num_workers: 4
 batch_size: 64
