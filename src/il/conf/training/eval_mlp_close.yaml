@@ -13,4 +13,4 @@ trainer:
   _target_: il.training.mlp_close_eval.MLPCloseEvaluator
   _convert_: "all"
 
-  checkpoint_path: log/il_train_mlp_20260502_012110/best_model.pt
+  checkpoint_path: log/il_train_mlp_20260502_014051/epoch_150.pt

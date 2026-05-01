@@ -4,12 +4,15 @@ init_speed: 5.0
 init_lateral_offset: 0.0
 init_heading_offset: 0.0
 
-road_points_ahead: 20
+road_points_ahead: 60 
 include_road_obs: true
 
 render_mode: human
 auto_render: false
 render_fps: 30
+render_width: 2200
+render_height: 2000
+render_scale: 10.0
 
 # 随机初始化（开启后在范围内随机采样，覆盖上面的固定值）
 random_init: true
@@ -27,6 +30,7 @@ reward_config:
     action_penalty: 5.0
     off_road_penalty: 10.0
   target_speed: 5.0
+max_lateral_offset: 5.0
 
 road_config:
   lane_width: 3.5

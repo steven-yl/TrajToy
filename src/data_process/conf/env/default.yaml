@@ -4,7 +4,7 @@ init_speed: 5.0
 init_lateral_offset: 0.0
 init_heading_offset: 0.0
 
-road_points_ahead: 20
+road_points_ahead: 80
 include_road_obs: true
 
 render_mode: null

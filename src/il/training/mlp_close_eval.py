@@ -284,7 +284,7 @@ def _run_single_episode(
                     "label": "MPC reference",
                 },
                 {
-                    "points": np.asarray(ref_mpc, dtype=np.float32),
+                    "points": np.asarray(ref_path, dtype=np.float32),
                     "color": (200, 255, 255),
                     "width": 3,
                     "style": "solid",

@@ -1,13 +1,13 @@
 data_dirs:
   # - data/20260501_202358/preprocessed  # mlp ok
-  - data/20260502_010549/preprocessed
+  - data/20260502_012804/preprocessed
 train_ratio: 0.8
 val_ratio: 0.1
 history_len: 5
 future_len: 25
 history_interval: 2
 future_interval: 2
-road_points: 20
+road_points: 60
 num_lane_dividers: 2
 use_local_coords: true
 num_workers: 4
