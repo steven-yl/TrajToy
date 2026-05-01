@@ -1,10 +1,10 @@
 dt: 0.1
-max_steps: 1000000
+max_steps: 100
 init_speed: 5.0
 init_lateral_offset: 0.0
 init_heading_offset: 0.0
 
-road_points_ahead: 60
+road_points_ahead: 20
 include_road_obs: true
 
 render_mode: null
@@ -36,8 +36,8 @@ road_config:
   loop_segments: true
   num_random_segments: 3
   segment_weights:
-    STRAIGHT: 5.0
-    CURVE: 5.0
+    STRAIGHT: 3.0
+    CURVE: 7.0
     INTERSECTION: 0.0
     SPLIT: 0.0
     MERGE: 0.0

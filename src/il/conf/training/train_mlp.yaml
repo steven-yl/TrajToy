@@ -6,14 +6,14 @@ defaults:
   - /log: default
   - _self_
 
-device: cpu
+device: cuda
 
 trainer:
   _target_: il.training.mlp_train.MLPTrainer
   _convert_: "all"
   checkpoint_path: null
 
-  num_epochs: 30
+  num_epochs: 100
   learning_rate: 1e-3
   weight_decay: 1e-4
   lr_scheduler: cosine

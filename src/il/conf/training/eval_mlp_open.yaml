@@ -4,10 +4,10 @@ defaults:
   - /log: default
   - _self_
 
-device: cpu
+device: cuda
 
 trainer:
   _target_: il.training.mlp_close_eval.MLPCloseEvaluator
   _convert_: "all"
 
-  checkpoint_path: log/il_mlp_train_20260430_160248/best_model.pt
+  checkpoint_path: log/il_train_mlp_20260501_221452/best_model.pt

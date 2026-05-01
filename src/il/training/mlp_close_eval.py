@@ -64,7 +64,7 @@ def _build_model_inputs(
     road_mask = np.zeros(n_points, dtype=np.float32)
     road_mask[:actual_len] = 1.0
 
-    centerline_mask = road_mask.copy() * 0.0
+    centerline_mask = road_mask.copy()
     left_boundary_mask = road_mask.copy()
     right_boundary_mask = road_mask.copy() 
     lane_dividers_mask = np.tile(road_mask[None, :], (n_dividers, 1))
@@ -148,7 +148,7 @@ def _predict_ref_path(
         world_xy[:, 1] = ey + pred_xy[:, 0] * sin_t + pred_xy[:, 1] * cos_t
         pred_xy = world_xy
 
-    target_speed = float(np.clip(pred_v[0], 0.0, 30.0))
+    target_speed = float(np.clip(pred_v[1], 0.0, 30.0))
     return pred_xy, target_speed
 
 

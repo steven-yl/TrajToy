@@ -32,7 +32,7 @@ def _model_forward(model: TrajectoryPredictor, b: dict[str, torch.Tensor]) -> to
         b["left_boundary"], b["left_boundary_mask"],
         b["right_boundary"], b["right_boundary_mask"],
         b["lane_dividers"], b["lane_dividers_mask"],
-        b.get("max_v"), b.get("max_v_mask"),
+        b["max_v"], b["max_v_mask"],
     )
 
 
@@ -42,12 +42,14 @@ def compute_metrics(
     dataloader: torch.utils.data.DataLoader,
     cfg: DictConfig,
 ) -> dict[str, float]:
-    """在数据集上计算 ADE / FDE。"""
+    """在数据集上计算 xy/heading/speed 的 ADE/FDE 指标。"""
     device = torch.device(cfg.device)
     model.eval()
     loss_fn = TrajectoryLoss(cfg)
 
-    total_ade = total_fde = 0.0
+    total_xy_ade = total_xy_fde = 0.0
+    total_heading_ade = total_heading_fde = 0.0
+    total_speed_ade = total_speed_fde = 0.0
     count = 0
 
     for batch in dataloader:
@@ -55,13 +57,33 @@ def compute_metrics(
         pred = _model_forward(model, b)
         _, comp = loss_fn(pred, b["future"], b["future_mask"])
         bs = b["history"].size(0)
-        total_ade += comp["ade"].item() * bs
-        total_fde += comp["fde"].item() * bs
+        total_xy_ade += comp["xy_ade"].item() * bs
+        total_xy_fde += comp["xy_fde"].item() * bs
+        total_heading_ade += comp["heading_ade"].item() * bs
+        total_heading_fde += comp["heading_fde"].item() * bs
+        total_speed_ade += comp["speed_ade"].item() * bs
+        total_speed_fde += comp["speed_fde"].item() * bs
         count += bs
 
     if count == 0:
-        return {"ade": 0.0, "fde": 0.0, "count": 0}
-    return {"ade": total_ade / count, "fde": total_fde / count, "count": count}
+        return {
+            "ade": 0.0, "fde": 0.0,  # backward-compatible aliases
+            "xy_ade": 0.0, "xy_fde": 0.0,
+            "heading_ade": 0.0, "heading_fde": 0.0,
+            "speed_ade": 0.0, "speed_fde": 0.0,
+            "count": 0,
+        }
+    xy_ade = total_xy_ade / count
+    xy_fde = total_xy_fde / count
+    return {
+        "ade": xy_ade, "fde": xy_fde,  # backward-compatible aliases
+        "xy_ade": xy_ade, "xy_fde": xy_fde,
+        "heading_ade": total_heading_ade / count,
+        "heading_fde": total_heading_fde / count,
+        "speed_ade": total_speed_ade / count,
+        "speed_fde": total_speed_fde / count,
+        "count": count,
+    }
 
 
 @torch.no_grad()

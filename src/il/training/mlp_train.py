@@ -104,7 +104,9 @@ class MLPTrainer(TrainerBase):
         epoch_pbar = tqdm(range(1, trainer_cfg.num_epochs + 1), desc="Epochs", unit="epoch")
         for epoch in epoch_pbar:
             model.train()
-            losses, ades, fdes = [], [], []
+            losses, xy_ades, xy_fdes = [], [], []
+            heading_ades, heading_fdes = [], []
+            speed_ades, speed_fdes = [], []
             t0 = time.monotonic()
 
             batch_pbar = tqdm(
@@ -147,66 +149,101 @@ class MLPTrainer(TrainerBase):
 
                 global_step += 1
                 losses.append(comp["total"].item())
-                ades.append(comp["ade"].item())
-                fdes.append(comp["fde"].item())
+                xy_ades.append(comp["xy_ade"].item())
+                xy_fdes.append(comp["xy_fde"].item())
+                heading_ades.append(comp["heading_ade"].item())
+                heading_fdes.append(comp["heading_fde"].item())
+                speed_ades.append(comp["speed_ade"].item())
+                speed_fdes.append(comp["speed_fde"].item())
 
                 if writer:
                     writer.add_scalar("train/loss", comp["total"].item(), global_step)
-                    writer.add_scalar("train/ade", comp["ade"].item(), global_step)
-                    writer.add_scalar("train/fde", comp["fde"].item(), global_step)
+                    writer.add_scalar("train/xy_ade", comp["xy_ade"].item(), global_step)
+                    writer.add_scalar("train/xy_fde", comp["xy_fde"].item(), global_step)
+                    writer.add_scalar("train/heading_ade", comp["heading_ade"].item(), global_step)
+                    writer.add_scalar("train/heading_fde", comp["heading_fde"].item(), global_step)
+                    writer.add_scalar("train/speed_ade", comp["speed_ade"].item(), global_step)
+                    writer.add_scalar("train/speed_fde", comp["speed_fde"].item(), global_step)
                     writer.add_scalar("train/lr", optimizer.param_groups[0]["lr"], global_step)
 
                 batch_pbar.set_postfix(
                     loss=f"{comp['total'].item():.4f}",
-                    ade=f"{comp['ade'].item():.4f}",
-                    fde=f"{comp['fde'].item():.4f}",
+                    xy_ade=f"{comp['xy_ade'].item():.4f}",
+                    xy_fde=f"{comp['xy_fde'].item():.4f}",
+                    heading_ade=f"{comp['heading_ade'].item():.4f}",
+                    heading_fde=f"{comp['heading_fde'].item():.4f}",
+                    speed_ade=f"{comp['speed_ade'].item():.4f}",
+                    speed_fde=f"{comp['speed_fde'].item():.4f}",
                     lr=f"{optimizer.param_groups[0]['lr']:.2e}",
                 )
 
                 if (batch_idx + 1) % log_cfg.log_interval == 0:
                     print(
                         f"  [{epoch}/{trainer_cfg.num_epochs}] batch {batch_idx + 1}/{len(train_loader)} "
-                        f"loss={comp['total'].item():.4f} ade={comp['ade'].item():.4f} fde={comp['fde'].item():.4f}"
+                        f"loss={comp['total'].item():.4f} "
+                        f"xy_ade={comp['xy_ade'].item():.4f} xy_fde={comp['xy_fde'].item():.4f} "
+                        f"heading_ade={comp['heading_ade'].item():.4f} heading_fde={comp['heading_fde'].item():.4f} "
+                        f"speed_ade={comp['speed_ade'].item():.4f} speed_fde={comp['speed_fde'].item():.4f}"
                     )
 
             dt = time.monotonic() - t0
-            ml, ma, mf = float(np.mean(losses)), float(np.mean(ades)), float(np.mean(fdes))
+            ml = float(np.mean(losses))
+            mxya, mxyf = float(np.mean(xy_ades)), float(np.mean(xy_fdes))
+            mha, mhf = float(np.mean(heading_ades)), float(np.mean(heading_fdes))
+            msa, msf = float(np.mean(speed_ades)), float(np.mean(speed_fdes))
 
             val = compute_metrics(model, val_loader, cfg)
             print(
                 f"Epoch {epoch}/{trainer_cfg.num_epochs} ({dt:.1f}s) "
-                f"train_loss={ml:.4f} ade={ma:.4f} fde={mf:.4f} | "
-                f"val_ade={val['ade']:.4f} val_fde={val['fde']:.4f}"
+                f"train_loss={ml:.4f} "
+                f"xy_ade={mxya:.4f} xy_fde={mxyf:.4f} "
+                f"heading_ade={mha:.4f} heading_fde={mhf:.4f} "
+                f"speed_ade={msa:.4f} speed_fde={msf:.4f} | "
+                f"val_xy_ade={val['xy_ade']:.4f} val_xy_fde={val['xy_fde']:.4f} "
+                f"val_heading_ade={val['heading_ade']:.4f} val_heading_fde={val['heading_fde']:.4f} "
+                f"val_speed_ade={val['speed_ade']:.4f} val_speed_fde={val['speed_fde']:.4f}"
             )
             epoch_pbar.set_postfix(
                 train_loss=f"{ml:.4f}",
-                val_ade=f"{val['ade']:.4f}",
-                val_fde=f"{val['fde']:.4f}",
+                val_xy_ade=f"{val['xy_ade']:.4f}",
+                val_xy_fde=f"{val['xy_fde']:.4f}",
             )
 
             if writer:
                 for tag, v in [
-                    ("epoch/train_loss", ml),
-                    ("epoch/train_ade", ma),
-                    ("epoch/train_fde", mf),
-                    ("epoch/val_ade", val["ade"]),
-                    ("epoch/val_fde", val["fde"]),
+                    ("epoch_train/train_loss", ml),
+                    ("epoch_train/xy_ade", mxya),
+                    ("epoch_train/xy_fde", mxyf),
+                    ("epoch_train/heading_ade", mha),
+                    ("epoch_train/heading_fde", mhf),
+                    ("epoch_train/speed_ade", msa),
+                    ("epoch_train/speed_fde", msf),
+                    ("epoch_val/xy_ade", val["xy_ade"]),
+                    ("epoch_val/xy_fde", val["xy_fde"]),
+                    ("epoch_val/heading_ade", val["heading_ade"]),
+                    ("epoch_val/heading_fde", val["heading_fde"]),
+                    ("epoch_val/speed_ade", val["speed_ade"]),
+                    ("epoch_val/speed_fde", val["speed_fde"]),
                 ]:
                     writer.add_scalar(tag, v, epoch)
 
-            if val["ade"] < best_val_ade:
-                best_val_ade = val["ade"]
+            if val["xy_ade"] < best_val_ade:
+                best_val_ade = val["xy_ade"]
                 torch.save(
                     {
                         "epoch": epoch,
                         "model_state_dict": model.state_dict(),
                         "optimizer_state_dict": optimizer.state_dict(),
-                        "val_ade": val["ade"],
-                        "val_fde": val["fde"],
+                        "val_xy_ade": val["xy_ade"],
+                        "val_xy_fde": val["xy_fde"],
+                        "val_heading_ade": val["heading_ade"],
+                        "val_heading_fde": val["heading_fde"],
+                        "val_speed_ade": val["speed_ade"],
+                        "val_speed_fde": val["speed_fde"],
                     },
                     save_dir / "best_model.pt",
                 )
-                print(f"  ★ 保存最优模型 val_ade={val['ade']:.4f}")
+                print(f"  ★ 保存最优模型 val_xy_ade={val['xy_ade']:.4f}")
 
             if epoch % log_cfg.save_interval == 0:
                 torch.save(
@@ -220,7 +257,13 @@ class MLPTrainer(TrainerBase):
 
         print("\n" + "=" * 60)
         test = compute_metrics(model, test_loader, cfg)
-        print(f"测试集: ADE={test['ade']:.4f} FDE={test['fde']:.4f} ({test['count']} 样本)")
+        print(
+            f"测试集: "
+            f"xy_ade={test['xy_ade']:.4f} xy_fde={test['xy_fde']:.4f} "
+            f"heading_ade={test['heading_ade']:.4f} heading_fde={test['heading_fde']:.4f} "
+            f"speed_ade={test['speed_ade']:.4f} speed_fde={test['speed_fde']:.4f} "
+            f"({test['count']} 样本)"
+        )
 
         torch.save(
             {"epoch": trainer_cfg.num_epochs, "model_state_dict": model.state_dict()},
