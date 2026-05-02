@@ -14,10 +14,10 @@ render_fps: 30
 # 随机初始化（开启后在范围内随机采样，覆盖上面的固定值）
 random_init: true
 random_config:
-  random_init_speed_range: [0.0, 10.0]
+  random_init_speed_range: [0.0, 30.0]
   random_init_lateral_offset_range: [-1.5, 1.5]
   random_init_heading_offset_range: [-0.2, 0.2]
-  random_target_speed_range: [0.0, 10.0]
+  random_target_speed_range: [0.0, 30.0]
 
 reward_config:
   weights:
@@ -34,7 +34,7 @@ road_config:
   points_per_meter: 1.0
   fixed_segments: null
   loop_segments: true
-  num_random_segments: 3
+  num_random_segments: 5
   segment_weights:
     STRAIGHT: 3.0
     CURVE: 7.0

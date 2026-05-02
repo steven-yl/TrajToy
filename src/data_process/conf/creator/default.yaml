@@ -1,4 +1,4 @@
-num_episodes: 50
+num_episodes: 250
 max_steps_per_episode: 10000
 save_interval: 1
 num_workers: 1

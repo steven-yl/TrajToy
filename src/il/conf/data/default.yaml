@@ -1,6 +1,6 @@
 data_dirs:
   # - data/20260501_202358/preprocessed  # mlp ok
-  - data/20260502_012804/preprocessed
+  - data/20260502_021749/preprocessed
 train_ratio: 0.8
 val_ratio: 0.1
 history_len: 5
