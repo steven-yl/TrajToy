@@ -82,7 +82,7 @@ class MLPTrainer(TrainerBase):
 
         optimizer = torch.optim.AdamW(
             model.parameters(),
-            lr=cfg.trainer.learning_rate,
+            lr=cfg.trainer.lr,
             weight_decay=cfg.trainer.weight_decay,
         )
         scheduler = _build_scheduler(optimizer, cfg.trainer, len(train_loader))

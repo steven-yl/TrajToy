@@ -137,7 +137,7 @@ class StateClsEncoder(nn.Module):
         self.road_pe = PositionalEncoding(hidden, max_len=dc.road_points, dropout=mc.dropout)
 
         # 类型嵌入 (0=centerline, 1=left, 2=right, 3=divider, 4=speed_token)
-        self.road_type_emb = nn.Embedding(4, hidden)
+        self.road_type_emb = nn.Embedding(5, hidden)
 
         # --- The [CLS] token, a learnable parameter ---
         self.cls_token = nn.Parameter(torch.randn(1, 1, hidden))
@@ -156,7 +156,6 @@ class StateClsEncoder(nn.Module):
     def forward(
         self,
         state_dict: Dict[str, torch.Tensor]) ->torch.Tensor:
-        print("state_dict", state_dict)
         history = state_dict["history"]
         history_mask = state_dict["history_mask"]
         centerline = state_dict["centerline"]

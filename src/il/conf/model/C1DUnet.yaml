@@ -14,6 +14,6 @@ StateClsEncoder:
   num_attn_heads: 4
   dropout: 0.1
   history_len: 10
-  road_points: 10
+  road_points: 60
   history_state_dim: 7
   road_feature_dim: 2

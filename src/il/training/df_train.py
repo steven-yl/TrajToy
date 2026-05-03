@@ -24,9 +24,9 @@ class DFTrainer(TrainerBase):
 
         trainer_cfg = self.cfg.trainer
 
-        epochs = int(trainer_cfg.get("num_epochs", 1000))
-        sample_batch_size = int(trainer_cfg.get("sample_batch_size", 64))
-        lr = float(trainer_cfg.get("learning_rate", 2e-4))
+        epochs = trainer_cfg.num_epochs
+        sample_batch_size = trainer_cfg.sample_batch_size
+        lr = trainer_cfg.lr
 
         device = torch.device(trainer_cfg.get("device", trainer_cfg.get("device", "cpu")))
         train_loader, _, _ = create_dataloaders(self.cfg)

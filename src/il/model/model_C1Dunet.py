@@ -64,8 +64,9 @@ class Conditional1DUNet(nn.Module, ModelMixin):
         up_dims = down_dims[::-1]
         for i in range(len(up_dims) - 1):
             # Note the order of layers in the ModuleList for clarity
+            # 与下采样 Conv1d(k=3,s=2,p=1) 配对：对固定 L=25 有 25→13→7→13→25（kernel=4 会得到 7→14 与 skip 错位）
             self.up_blocks.append(nn.ModuleList([
-                nn.ConvTranspose1d(up_dims[i], up_dims[i], kernel_size=4, stride=2, padding=1),
+                nn.ConvTranspose1d(up_dims[i], up_dims[i], kernel_size=3, stride=2, padding=1),
                 FiLMConditionedResidualBlock(up_dims[i] * 2, up_dims[i+1], cond_embed_dim),
                 FiLMConditionedResidualBlock(up_dims[i+1], up_dims[i+1], cond_embed_dim),
             ]))
@@ -82,7 +83,7 @@ class Conditional1DUNet(nn.Module, ModelMixin):
         # --- 1. Prepare Conditioning Vector ---
         time_embedding = self.time_encoder(sigma)
         scene_embedding = self.state_encoder(cond)
-        cond_embedding = torch.cat([time_embedding, scene_embedding], dim=1)
+        cond_embedding = torch.cat([time_embedding.squeeze(1), scene_embedding], dim=1)
         
         # --- 2. U-Net Forward Pass ---
         # Input shape for Conv1d is (B, C, L), so we need to transpose
