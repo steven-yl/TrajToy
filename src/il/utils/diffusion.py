@@ -75,6 +75,14 @@ class ScheduleCosine(Schedule):
 # Returns
 #   eps  : i.i.d. normal with same shape as x0
 #   sigma: uniformly sampled from schedule, with shape Bx1x..x1 for broadcasting
+def _batch_to_device(batch: dict, device: torch.device) -> dict:
+    """Move tensor values in a dataloader batch dict onto ``device``."""
+    return {
+        k: v.to(device, non_blocking=True) if torch.is_tensor(v) else v
+        for k, v in batch.items()
+    }
+
+
 def generate_train_sample(x0: torch.FloatTensor,
                           schedule: Schedule):
     sigma = schedule.sample_batch(x0)
@@ -136,8 +144,10 @@ def training_loop(loader      : DataLoader,
                   lr          : float = 1e-3,
                   conditional : bool = False):
     optimizer = torch.optim.AdamW(model.parameters(), lr=lr)
-    for _ in (pbar := tqdm(range(epochs))):
+    device = next(model.parameters()).device
+    for epoch in (pbar := tqdm(range(epochs), desc="Epochs")):
         for batch in loader:
+            batch = _batch_to_device(batch, device)
             x = batch["future"]
             future_mask = batch["future_mask"]
             cond = batch
@@ -156,9 +166,9 @@ def training_loop(loader      : DataLoader,
                 sq_err = (pred_eps - eps) ** 2
                 loss = (sq_err * mask).sum() / mask.sum().clamp_min(1.0)
 
-            yield SimpleNamespace(**locals()) # For extracting training statistics
             loss.backward()
             optimizer.step()
+            yield SimpleNamespace(**locals())  # after step: OK for EMA / checkpoint timing
 
 
 # Generalizes most commonly-used samplers:
@@ -175,6 +185,8 @@ def samples(model      : nn.Module,
             xt         : Optional[torch.FloatTensor] = None,
             cond       : Optional[torch.Tensor] = None):
     model.eval()
+    device = next(model.parameters()).device
+    sigmas = sigmas.to(device)
     xt = model.rand_input(batchsize) * sigmas[0] if xt is None else xt
     if cond is not None:
         assert cond.shape[0] == xt.shape[0], 'cond must have same shape as x!'
