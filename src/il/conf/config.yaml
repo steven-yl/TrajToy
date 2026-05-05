@@ -11,5 +11,5 @@ hydra:
     subdir: ${hydra.job.num}
 
 defaults:
-  - training: train_df   # train_mlp / eval_mlp_open / eval_mlp_close / train_df
+  - training: train_df   # train_mlp / train_df / eval_mlp_close / eval_df_close / ...
   - _self_

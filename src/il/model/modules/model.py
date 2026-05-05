@@ -11,7 +11,14 @@ from itertools import pairwise
 class ModelMixin:
     def rand_input(self, batchsize):
         assert hasattr(self, 'input_dims'), 'Model must have "input_dims" attribute!'
-        return torch.randn((batchsize,) + self.input_dims)
+        p = next(self.parameters(), None)
+        if p is None:
+            return torch.randn((batchsize,) + self.input_dims)
+        return torch.randn(
+            (batchsize,) + self.input_dims,
+            device=p.device,
+            dtype=p.dtype,
+        )
 
     # Currently predicts eps, override following methods to predict, for example, x0
     def get_loss(self, x0, sigma, eps, cond=None, loss=nn.MSELoss):

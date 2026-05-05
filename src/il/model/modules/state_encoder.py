@@ -216,10 +216,11 @@ class StateClsEncoder(nn.Module):
             ],
             dim=1,
         )
+        # True = padding position（与 nn.TransformerEncoder / model_mlp.StateEncoder 约定一致）
         full_mask = enc_mask == 0
 
         # --- 4. Pass through the Transformer ---
-        transformer_output = self.transformer(src=full_enc_input, src_key_padding_mask=~full_mask)
+        transformer_output = self.transformer(src=full_enc_input, src_key_padding_mask=full_mask)
 
         # --- 5. Extract the [CLS] token's output ---
         # The [CLS] token is the first token in the sequence (index 0).

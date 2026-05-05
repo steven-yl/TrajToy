@@ -21,15 +21,17 @@ from .modules.conditione_block import FiLMConditionedResidualBlock
 from .modules.state_encoder import StateClsEncoder
 from .modules.embedding_block import SinusoidalTimeEmbedding
 
-class Conditional1DUNet(nn.Module, ModelMixin):
+class Conditional1DUNet(nn.Module):
     """
     The main model. It takes a noisy trajectory, a timestep, and the scene context,
     and predicts the noise that was added to the trajectory.
     """
     def __init__(self, config: Dict):
         super().__init__()
-        C1DUnet_config = config['model']["C1DUnet"]
-        prediction_state_dim =C1DUnet_config['prediction_state_dim']
+        C1DUnet_config = config["model"]["C1DUnet"]
+        prediction_state_dim = C1DUnet_config["prediction_state_dim"]
+        future_len = int(config["data"]["future_len"])
+        self.input_dims = (future_len, prediction_state_dim)
         time_embed_dim = C1DUnet_config['time_embed_dim']
         scene_embed_dim = C1DUnet_config['scene_embed_dim']
         down_dims = C1DUnet_config['down_dims']
@@ -76,14 +78,14 @@ class Conditional1DUNet(nn.Module, ModelMixin):
     def forward(
         self, 
         noisy_trajectory: torch.Tensor, # (B, L, C_traj)
-        sigma: torch.Tensor,         # (B,)
+        timestep: torch.Tensor,         # (B,)
         cond: Dict[str, torch.Tensor]
     ) -> torch.Tensor:
         
         # --- 1. Prepare Conditioning Vector ---
-        time_embedding = self.time_encoder(sigma)
+        time_embedding = self.time_encoder(timestep)
         scene_embedding = self.state_encoder(cond)
-        cond_embedding = torch.cat([time_embedding.squeeze(1), scene_embedding], dim=1)
+        cond_embedding = torch.cat([time_embedding, scene_embedding], dim=1)
         
         # --- 2. U-Net Forward Pass ---
         # Input shape for Conv1d is (B, C, L), so we need to transpose
@@ -132,3 +134,5 @@ class Conditional1DUNet(nn.Module, ModelMixin):
         predicted_noise = x.permute(0, 2, 1)
         
         return predicted_noise
+
+

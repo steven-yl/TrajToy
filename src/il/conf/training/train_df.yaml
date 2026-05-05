@@ -1,6 +1,7 @@
 defaults:
-  - /data: default
+  - /data: df
   - /model: C1DUnet
+  - /loss: mse
   - /log: default
   - _self_
 
@@ -13,5 +14,16 @@ trainer:
   checkpoint_path: null
 
   num_epochs: 1000
-  lr: 2e-4
-  sample_batch_size: 64
+  lr: 1e-4
+
+  # 验证：val_rollout=true 会在验证集上跑完整 DDPM（步数=schedule num_steps，很慢）
+  val_rollout: true
+  val_interval: 5
+
+  schedule_cfg:
+    type: cosine
+    num_steps: 1000
+    beta_start: 1e-4
+    beta_end: 0.02
+    # 验证 rollout 加速：设为小于 num_steps 的整数时用 DDIM 子序列（不改训练噪声表）
+    num_inference_steps: null

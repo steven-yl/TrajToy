@@ -1,0 +1,25 @@
+
+defaults:
+  - /data: df
+  - /model: C1DUnet
+  - /loss: mse
+  - /log: default
+  - /env: eval_env
+  - /controller: mpc
+  - _self_
+
+device: cuda
+
+trainer:
+  _target_: il.training.df_close_eval.DFCloseEvaluator
+  _convert_: "all"
+
+  checkpoint_path: log/il_train_df_20260504_231108/best_model.pt
+
+  # 必须与训练 checkpoint 一致，否则采样过程不匹配
+  schedule_cfg:
+    type: cosine
+    num_steps: 1000
+    beta_start: 1e-4
+    beta_end: 0.02
+    num_inference_steps: null
