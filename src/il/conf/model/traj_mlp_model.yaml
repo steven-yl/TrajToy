@@ -1,0 +1,26 @@
+defaults:
+  - /modules/model@traj_predictor: traj_mlp
+  - _self_
+
+_target_: il.model.traj_mlp.TrajMLP
+_convert_: all
+
+# MLP trajectory predictor configuration (overrides on top of /modules/model/traj_mlp).
+traj_predictor:
+  history_len: 5
+  future_len: 25
+  road_points: 60
+
+# TrajLoss configuration.
+loss_fn:
+  _target_: il.modules.loss.traj_loss.TrajLoss
+  cfg_ade_weight: 1.0
+  cfg_fde_weight: 1.0
+
+# TrajMetrics configuration.
+metrics_fn:
+  _target_: il.modules.metrics.traj_metrics.TrajMetrics
+
+# Optimizer hyperparameters (used in TrajMLP.configure_optimizers).
+lr: 1.0e-3
+weight_decay: 1.0e-4

@@ -1,0 +1,7 @@
+_target_: frame.examples.toy.ToyDataModule
+n_train: 128
+n_val: 32
+batch_size: 16
+dim_in: 10
+num_classes: 2
+seed: 0

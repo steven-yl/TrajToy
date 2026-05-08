@@ -1,4 +1,4 @@
-"""Hydra entry for IL on TrainFlow: ``python -m il.train``."""
+"""Hydra entry for TrainFlow: ``python -m trainflow.train`` (ensure ``src`` on PYTHONPATH)."""
 
 from __future__ import annotations
 

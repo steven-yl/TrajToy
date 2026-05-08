@@ -1,0 +1,3 @@
+_target_: trainflow.examples.toy.ToyModel
+dim_in: 10
+num_classes: 2

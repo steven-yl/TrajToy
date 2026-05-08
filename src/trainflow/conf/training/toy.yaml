@@ -1,0 +1,85 @@
+# Comprehensive TrainFlow single-file recipe.
+# Supports Hydra instantiate with nested objects via ``_target_`` and ``_recursive_=True``.
+#
+# Run:
+#   PYTHONPATH=src python -m trainflow.train training=toy
+#
+# Common overrides:
+#   # AMP (FP16) on CUDA
+#   PYTHONPATH=src python -m trainflow.train training=toy trainflow.trainer.precision=16-mixed
+#
+#   # BF16 on CUDA
+#   PYTHONPATH=src python -m trainflow.train training=toy trainflow.trainer.precision=bf16
+#
+#   # Enable torch.compile
+#   PYTHONPATH=src python -m trainflow.train training=toy trainflow.trainer.compiler=true
+#
+#   # Gradient accumulation / clipping
+#   PYTHONPATH=src python -m trainflow.train training=toy trainflow.trainer.gradient_accumulation_steps=4 trainflow.trainer.gradient_clip_val=1.0
+#
+#   # DDP (requires torchrun / distributed init outside trainer)
+#   PYTHONPATH=src torchrun --nproc_per_node=2 -m trainflow.train training=toy trainflow.trainer.strategy=ddp
+#
+#   # Larger toy dataset
+#   PYTHONPATH=src python -m trainflow.train training=toy trainflow.data.n_train=4096 trainflow.data.n_val=512
+
+trainflow:
+  trainer:
+    _target_: trainflow.trainer.Trainer
+    _convert_: "all"
+
+    # Core runtime
+    max_epochs: 10
+    accelerator: auto        # auto / cpu
+    devices: null            # null -> auto device pick in current Trainer
+    strategy: none           # none / ddp
+    precision: "32"          # "32" / "16-mixed" / "bf16"
+    compiler: false          # torch.compile(model) when available
+
+    # Optimization controls
+    gradient_accumulation_steps: 1
+    gradient_clip_val: 1.0
+    log_every_n_steps: 5
+
+    # Built-in callbacks
+    callbacks:
+      - _target_: trainflow.callbacks.ModelCheckpoint
+        dirpath: ${hydra:runtime.output_dir}/checkpoint
+        monitor: val_loss
+        mode: min
+        save_top_k: 2
+        filename: "{epoch:03d}-{step:08d}.ckpt"
+
+      - _target_: trainflow.callbacks.EarlyStopping
+        monitor: val_loss
+        mode: min
+        patience: 5
+        min_delta: 0.0
+
+      - _target_: trainflow.callbacks.LearningRateMonitor
+        name: lr
+
+      - _target_: trainflow.callbacks.TrainProgressBar
+        leave: true
+
+    # Multi-logger example
+    logger:
+      - _target_: trainflow.loggers.CSVLogger
+        save_dir: ${hydra:runtime.output_dir}/metrics
+        filename: metrics.csv
+      - _target_: trainflow.loggers.TensorBoardLogger
+        save_dir: ${hydra:runtime.output_dir}/tb
+
+  model:
+    _target_: trainflow.examples.toy.ToyModel
+    dim_in: 10
+    num_classes: 2
+
+  data:
+    _target_: trainflow.examples.toy.ToyDataModule
+    n_train: 1024
+    n_val: 256
+    batch_size: 32
+    dim_in: 10
+    num_classes: 2
+    seed: 0

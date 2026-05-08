@@ -1,0 +1,7 @@
+
+defaults:
+  - /trainer@trainflow.trainer: default
+  - /data@trainflow.data: traj_mlp_data
+  - /model@trainflow.model: traj_mlp_model
+  - _self_
+

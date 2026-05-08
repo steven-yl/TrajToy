@@ -1,6 +1,6 @@
 app:
-  name: il
-  selected_training: ${hydra:runtime.choices.training@_global_}
+  name: trainflow
+  selected_training: ${hydra:runtime.choices.training}
   log_root: log
 
 hydra:
@@ -11,5 +11,5 @@ hydra:
     subdir: ${hydra.job.num}
 
 defaults:
-  - training@: train_mlp_traj
+  - training@: toy
   - _self_

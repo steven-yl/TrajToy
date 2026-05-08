@@ -1,3 +1,0 @@
-save_dir: ${hydra:runtime.output_dir}
-log_interval: 10
-save_interval: 10
