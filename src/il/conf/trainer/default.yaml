@@ -21,6 +21,8 @@ callbacks:
     leave: true
   - _target_: trainflow.callbacks.TestProgressBar
     leave: true
+  - _target_: trainflow.callbacks.PredictProgressBar
+    leave: true
   - _target_: trainflow.callbacks.TimeMonitor
     log_metrics: true
     verbose: false

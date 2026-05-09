@@ -7,6 +7,7 @@ from .callbacks import (
     TrainProgressBar,
     ValidationProgressBar,
     TestProgressBar,
+    PredictProgressBar,
 )
 from .config import instantiate, instantiate_hydra_node, instantiate_many
 from .data import DataModule
@@ -31,6 +32,7 @@ __all__ = [
     "TrainProgressBar",
     "ValidationProgressBar",
     "TestProgressBar",
+    "PredictProgressBar",
     "SingleDeviceStrategy",
     "Strategy",
     "TensorBoardLogger",

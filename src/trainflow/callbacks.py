@@ -222,6 +222,37 @@ class TestProgressBar(Callback):
         self._pbar.close()
         self._pbar = None
 
+
+
+class PredictProgressBar(Callback):
+    """Terminal progress bar for predict epochs (uses ``tqdm`` if installed)."""
+
+    def __init__(self, leave: bool = True) -> None:
+        self.leave = leave
+        self._pbar: Any = None
+
+    def on_predict_epoch_start(self, trainer: Any) -> None:
+        try:
+            from tqdm.auto import tqdm
+        except ImportError:  # pragma: no cover
+            self._pbar = None
+            return
+        dl = trainer.datamodule.predict_dataloader()
+        total = len(dl) if hasattr(dl, "__len__") else None
+        self._pbar = tqdm(total=total, desc=f"predict epoch {trainer.current_epoch}", leave=self.leave)
+
+
+    def on_predict_batch_end(self, trainer: Any, outputs: Any, batch: Any, batch_idx: int) -> None:
+        if self._pbar is None:
+            return
+        self._pbar.update(1)
+
+    def on_predict_epoch_end(self, trainer: Any) -> None:
+        if self._pbar is None:
+            return
+        self._pbar.close()
+        self._pbar = None
+
 class TimeMonitor(Callback):
     """Track wall-clock time for fit / train epoch / val epoch / test epoch.
 

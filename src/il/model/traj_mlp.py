@@ -66,4 +66,4 @@ class TrajMLP(TrainableModel):
         return out
 
     def predict_step(self, batch: dict[str, torch.Tensor]) -> dict[str, torch.Tensor]:
-        return {"pred": self._predict(batch), "batch": batch}
+        return {"pred_future": self._predict(batch), "batch": batch}

@@ -124,6 +124,7 @@ def run_fit(cfg: DictConfig) -> None:
 
 
 def run_validate(cfg: DictConfig) -> None:
+    print("start validate...")
     trainer, model, datamodule = instantiate_trainflow(cfg)
     trainer.model = model
     trainer.datamodule = datamodule
@@ -132,10 +133,13 @@ def run_validate(cfg: DictConfig) -> None:
         raise ValueError("Missing config key `resume_checkpoint` (required for validate).")
     strict, weights_only = _resolve_strict_weights_only(cfg)
     trainer.load_checkpoint(ckpt, strict=strict, weights_only=weights_only)
-    trainer.validate()
+    metrics = trainer.validate()
+    print("validate done!")
+    return metrics
 
 
 def run_test(cfg: DictConfig) -> None:
+    print("start test...")
     trainer, model, datamodule = instantiate_trainflow(cfg)
     trainer.model = model
     trainer.datamodule = datamodule
@@ -144,9 +148,12 @@ def run_test(cfg: DictConfig) -> None:
         raise ValueError("Missing config key `resume_checkpoint` (required for test).")
     strict, weights_only = _resolve_strict_weights_only(cfg)
     trainer.load_checkpoint(ckpt, strict=strict, weights_only=weights_only)
-    trainer.test()
+    metrics = trainer.test()
+    print("test done!")
+    return metrics
 
-def run_predict(cfg: DictConfig) -> None:
+def run_predict(cfg: DictConfig) -> list[Any]:
+    print("start predict...")
     trainer, model, datamodule = instantiate_trainflow(cfg)
     trainer.model = model
     trainer.datamodule = datamodule
@@ -155,4 +162,6 @@ def run_predict(cfg: DictConfig) -> None:
         raise ValueError("Missing config key `resume_checkpoint` (required for predict).")
     strict, weights_only = _resolve_strict_weights_only(cfg)
     trainer.load_checkpoint(ckpt, strict=strict, weights_only=weights_only)
-    trainer.predict()
+    outputs = trainer.predict()
+    print("predict done!")
+    return outputs

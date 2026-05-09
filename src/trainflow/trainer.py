@@ -135,14 +135,22 @@ class Trainer:
         self._ensure_model_and_datamodule()
         self.model.to(self.device)
         self.datamodule.setup(stage="validate")
-        return self._run_eval_loop(stage="val")
+        metrics = self._run_eval_loop(stage="val")
+        if metrics:
+            self.log(metrics)
+            self.logger.finalize()
+        return metrics
 
     @torch.no_grad()
     def test(self) -> dict[str, float]:
         self._ensure_model_and_datamodule()
         self.model.to(self.device)
         self.datamodule.setup(stage="test")
-        return self._run_eval_loop(stage="test")
+        metrics = self._run_eval_loop(stage="test")
+        if metrics:
+            self.log(metrics)
+            self.logger.finalize()
+        return metrics
 
     @torch.no_grad()
     def predict(self) -> list[Any]:
@@ -151,9 +159,15 @@ class Trainer:
         self.datamodule.setup(stage="predict")
         self.model.eval()
         dl = self.datamodule.predict_dataloader()
-        outputs = []
-        for batch in dl:
-            outputs.append(self.model.predict_step(self._to_device(batch)))
+        outputs: list[Any] = []
+        self._call("on_predict_epoch_start")
+        for batch_idx, batch in enumerate(dl):
+            self._call("on_predict_batch_start", batch, batch_idx)
+            batch = self._to_device(batch)  
+            output = self.model.predict_step(batch)
+            outputs.append(output)
+            self._call("on_predict_batch_end", output, batch, batch_idx)
+        self._call("on_predict_epoch_end")
         return outputs
 
     def save_checkpoint(self, path: str | Path) -> None:
@@ -348,8 +362,6 @@ class Trainer:
         reduced = {f"{stage}/{k}": float(np.mean(v)) for k, v in agg.items() if v}
         self.current_metrics.update(reduced)
         self._call(epoch_end_hook)
-        if reduced:
-            self.log(reduced)
         return reduced
 
     def _call(self, hook: str, *args: Any) -> None:

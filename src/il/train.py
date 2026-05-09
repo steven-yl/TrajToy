@@ -22,18 +22,14 @@ OmegaConf.register_new_resolver("now", lambda fmt: datetime.now().strftime(fmt),
 def main(cfg: DictConfig) -> None:
     print(OmegaConf.to_yaml(cfg))
     if cfg.run_mode == "fit":
-        print("Running fit...")
         run_fit(cfg)
     elif cfg.run_mode == "validate":
-        print("Running validate...")
         run_validate(cfg)
     elif cfg.run_mode == "test":
-        print("Running test...")
         run_test(cfg)
     elif cfg.run_mode == "predict":
-        print("Running predict...")
         run_predict(cfg)
-    print("Done")
+    print("Done!")
 
 if __name__ == "__main__":
     main()
