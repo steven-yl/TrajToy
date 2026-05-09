@@ -9,6 +9,7 @@ from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Any
 
+import matplotlib
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.axes import Axes
@@ -40,7 +41,7 @@ class VisualizerBase(ABC):
         dpi: int | None = None,
         title: str | list[str] | None = None,
         save_path: str | Path | None = None,
-        show: bool = False,
+        show: bool = True,
         ax: Axes | None = None,
         ncols: int = 2,
         close: bool = True,
@@ -187,12 +188,17 @@ class VisualizerBase(ABC):
         Figure
             matplotlib Figure 对象（已关闭）。
         """
-        fig = cls.plot(data, figsize=figsize, dpi=dpi, title=title, close=False, **kwargs)
-        writer.add_figure(tag, fig, global_step=global_step, close=True)
+        original_backend = matplotlib.get_backend()
+        matplotlib.use("Agg")
+        try:
+            fig = cls.plot(data, figsize=figsize, dpi=dpi, title=title, close=False, **kwargs)
+            writer.add_figure(tag, fig, global_step=global_step, close=True)
+        finally:
+            matplotlib.use(original_backend)
         return fig
 
     @classmethod
-    def plot_to_numpy_image(
+    def to_numpy_image(
         cls,
         data: dict[str, Any] | list[dict[str, Any]],
         *,
@@ -210,13 +216,16 @@ class VisualizerBase(ABC):
         np.ndarray
             shape (H, W, 3)，dtype uint8 的 RGB 图像。
         """
-        fig = cls.plot(data, figsize=figsize, dpi=dpi, title=title, close=False, **kwargs)
-
-        fig.canvas.draw()
-        image = np.frombuffer(fig.canvas.tostring_rgb(), dtype=np.uint8)
-        image = image.reshape(fig.canvas.get_width_height()[::-1] + (3,))
-
-        plt.close(fig)
+        original_backend = matplotlib.get_backend()
+        matplotlib.use("Agg")
+        try:
+            fig = cls.plot(data, figsize=figsize, dpi=dpi, title=title, close=False, **kwargs)
+            fig.canvas.draw()
+            image = np.frombuffer(fig.canvas.tostring_rgb(), dtype=np.uint8)
+            image = image.reshape(fig.canvas.get_width_height()[::-1] + (3,))
+            plt.close(fig)
+        finally:
+            matplotlib.use(original_backend)
         return image
 
     # ── 子类必须实现 ──────────────────────────────────────────────────

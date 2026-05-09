@@ -26,6 +26,11 @@ callbacks:
   - _target_: trainflow.callbacks.TimeMonitor
     log_metrics: true
     verbose: false
+  - _target_: il.callback.traj_mlp_callback.TrajVisualizationCallback
+    log_every_n_epochs: 1
+    num_samples: 4
+    tag: val_vis/trajectory
+    ncols: 2
 logger:
   - _target_: trainflow.loggers.CSVLogger
     save_dir: ${hydra:runtime.output_dir}/metrics
