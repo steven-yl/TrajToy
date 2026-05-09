@@ -1,6 +1,6 @@
 _target_: trainflow.trainer.Trainer
 _convert_: "all"
-max_epochs: 10
+max_epochs: 100
 accelerator: auto
 devices: null
 precision: "32"
@@ -18,6 +18,8 @@ callbacks:
   - _target_: trainflow.callbacks.TrainProgressBar
     leave: true
   - _target_: trainflow.callbacks.ValidationProgressBar
+    leave: true
+  - _target_: trainflow.callbacks.TestProgressBar
     leave: true
   - _target_: trainflow.callbacks.TimeMonitor
     log_metrics: true

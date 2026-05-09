@@ -5,3 +5,7 @@ defaults:
   - /model@trainflow.model: traj_mlp_model
   - _self_
 
+auto_load_checkpoint: false
+resume_checkpoint: log/il_train_mlp_traj_20260509_141637/checkpoint/000-00000055.ckpt
+strict: true
+weights_only: false

@@ -1,6 +1,6 @@
 _target_: il.data.trajectory_data_module.TrajectoryDataModule
-train_ratio: 0.05
-val_ratio: 0.05
+train_ratio: 0.5
+val_ratio: 0.1
 num_workers: 0
 batch_size: 32
 data_set:

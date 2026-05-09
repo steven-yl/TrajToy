@@ -87,10 +87,39 @@ class Trainer:
         self.scaler = _make_grad_scaler(self._use_grad_scaler())
         self.device = self._select_device()
 
-    def fit(self, model: TrainableModel, datamodule: DataModule) -> None:
+    def fit(
+        self,
+        model: TrainableModel,
+        datamodule: DataModule,
+        *,
+        ckpt_path: str | Path | None = None,
+        ckpt_strict: bool = True,
+        ckpt_weights_only: bool = False,
+    ) -> None:
+        """Train ``model`` on ``datamodule``.
+
+        When ``ckpt_path`` is set, **model weights** are loaded **before** ``torch.compile`` (if
+        enabled) inside ``_setup_fit``, so ``load_state_dict`` always targets the plain module.
+        Training state (epoch, optimizers, schedulers, callbacks, RNG) is restored **after**
+        ``_setup_fit`` when ``ckpt_weights_only=False``. Callbacks still see the full resumed
+        state before ``on_fit_start``.
+
+        - ``ckpt_weights_only=True``: load ``model_state_dict`` only; optimizer/scheduler stay
+          freshly configured on the loaded weights.
+        - ``ckpt_weights_only=False``: full resume (epoch, step, optimizer, schedulers,
+          callbacks state, RNG) as saved by :meth:`save_checkpoint`.
+        """
         self.model = model
         self.datamodule = datamodule
+        resume_state: dict[str, Any] | None = None
+        if ckpt_path is not None:
+            resume_state = _torch_load_checkpoint(
+                ckpt_path, map_location="cpu", weights_only=ckpt_weights_only
+            )
+            self._apply_checkpoint_model_state(resume_state, strict=ckpt_strict)
         self._setup_fit()
+        if ckpt_path is not None and not ckpt_weights_only and resume_state is not None:
+            self._restore_training_state_from_checkpoint(resume_state)
         self._call("on_fit_start")
         for epoch in range(self.current_epoch, self.max_epochs):
             self.current_epoch = epoch
@@ -149,9 +178,22 @@ class Trainer:
 
     def load_checkpoint(self, path: str | Path, strict: bool = True, weights_only: bool = False) -> None:
         state = _torch_load_checkpoint(path, map_location="cpu", weights_only=weights_only)
-        self.model.load_state_dict(state["model_state_dict"], strict=strict)
+        self._apply_checkpoint_model_state(state, strict=strict)
         if weights_only:
             return
+        self._restore_training_state_from_checkpoint(state)
+
+    def _unwrap_model_for_state_dict(self) -> TrainableModel:
+        """Prefer the inner module when ``self.model`` is ``torch.compile``-wrapped."""
+        inner = getattr(self.model, "_orig_mod", None)
+        if inner is not None:
+            return inner  # type: ignore[return-value]
+        return self.model
+
+    def _apply_checkpoint_model_state(self, state: dict[str, Any], *, strict: bool) -> None:
+        self._unwrap_model_for_state_dict().load_state_dict(state["model_state_dict"], strict=strict)
+
+    def _restore_training_state_from_checkpoint(self, state: dict[str, Any]) -> None:
         self.current_epoch = int(state.get("epoch", 0))
         self.global_step = int(state.get("global_step", 0))
         for opt, opt_state in zip(self.optimizers, state.get("optimizer_state_dict", [])):
@@ -306,6 +348,8 @@ class Trainer:
         reduced = {f"{stage}/{k}": float(np.mean(v)) for k, v in agg.items() if v}
         self.current_metrics.update(reduced)
         self._call(epoch_end_hook)
+        if reduced:
+            self.log(reduced)
         return reduced
 
     def _call(self, hook: str, *args: Any) -> None:

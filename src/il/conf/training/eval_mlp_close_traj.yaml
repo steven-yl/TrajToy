@@ -1,5 +1,6 @@
 
 defaults:
+  - /modules/model@traj_predictor: traj_mlp
   - /data: default
   - /model: mlp
   - /log: default

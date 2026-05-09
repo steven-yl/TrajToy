@@ -56,6 +56,8 @@ class TrajectoryDataModule(DataModule):
         self._val_ds = Subset(ds, range(t_end, v_end))
         self._test_ds = Subset(ds, range(v_end, total))
 
+        print(f" full_ds: {len(self._full_ds)}, train_ds: {len(self._train_ds)}, val_ds: {len(self._val_ds)}, test_ds: {len(self._test_ds)}")
+
     def _loader_kw(self) -> dict:
         return {"num_workers": self._num_workers, "pin_memory": True}
 

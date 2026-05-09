@@ -6,10 +6,11 @@ from .callbacks import (
     TimeMonitor,
     TrainProgressBar,
     ValidationProgressBar,
+    TestProgressBar,
 )
 from .config import instantiate, instantiate_hydra_node, instantiate_many
 from .data import DataModule
-from .hydra_build import instantiate_trainflow, run_fit
+from .hydra_build import instantiate_trainflow, run_fit, run_validate, run_test
 from .loggers import CSVLogger, Logger, LoggerCollection, NoOpLogger, TensorBoardLogger
 from .model import TrainableModel
 from .strategies import DDPStrategy, SingleDeviceStrategy, Strategy, build_strategy
@@ -29,6 +30,7 @@ __all__ = [
     "TimeMonitor",
     "TrainProgressBar",
     "ValidationProgressBar",
+    "TestProgressBar",
     "SingleDeviceStrategy",
     "Strategy",
     "TensorBoardLogger",
@@ -40,4 +42,6 @@ __all__ = [
     "instantiate_many",
     "instantiate_trainflow",
     "run_fit",
+    "run_validate",
+    "run_test",
 ]

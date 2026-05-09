@@ -1,6 +1,6 @@
 app:
   name: il
-  selected_training: ${hydra:runtime.choices.training@_global_}
+  selected_training: ${hydra:runtime.choices.training@_global_}_${run_mode}
   log_root: log
 
 hydra:
@@ -11,5 +11,7 @@ hydra:
     subdir: ${hydra.job.num}
 
 defaults:
-  - training@: train_mlp_traj
+  - training@: train_mlp_traj # train_mlp_traj, eval_train_mlp_traj
   - _self_
+
+run_mode: fit # fit, validate, test, predict
