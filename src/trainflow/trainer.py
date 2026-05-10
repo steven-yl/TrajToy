@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib
 import os
 import random
 from contextlib import nullcontext
@@ -29,9 +30,44 @@ def _make_grad_scaler(enabled: bool):
         return CudaGradScaler(enabled=enabled)
 
 
-def _torch_load_checkpoint(path: Path | str, *, map_location: Any, weights_only: bool):
+def _numpy_pickling_safe_globals() -> list[Any]:
+    """Types referenced when unpickling NumPy arrays (e.g. ``np.random.get_state()`` in checkpoints)."""
+    extra: list[Any] = [np.ndarray, np.dtype]
+    for mod_name in ("numpy.core.multiarray", "numpy._core.multiarray"):
+        try:
+            mod = importlib.import_module(mod_name)
+            extra.append(mod._reconstruct)
+            break
+        except (ImportError, AttributeError):
+            continue
+    # NumPy 2.x / 1.26+: concrete scalar dtypes are classes under ``numpy.dtypes`` (e.g. UInt32DType for
+    # MT19937 key array); ``weights_only`` requires them in ``safe_globals``, not only ``numpy.dtype``.
     try:
-        return torch.load(path, map_location=map_location, weights_only=weights_only)
+        import numpy.dtypes as np_dtypes
+
+        for name in dir(np_dtypes):
+            obj = getattr(np_dtypes, name, None)
+            if isinstance(obj, type) and name.endswith("DType"):
+                extra.append(obj)
+    except ImportError:
+        pass
+    return extra
+
+
+def _weights_only_load_context():
+    """Allow NumPy objects pickled inside checkpoints when using ``weights_only=True`` (PyTorch ≥2.6)."""
+    try:
+        from torch.serialization import safe_globals
+    except ImportError:  # pragma: no cover — very old PyTorch
+        return nullcontext()
+    return safe_globals(_numpy_pickling_safe_globals())
+
+
+def _torch_load_checkpoint(path: Path | str, *, map_location: Any, weights_only: bool):
+    ctx = _weights_only_load_context() if weights_only else nullcontext()
+    try:
+        with ctx:
+            return torch.load(path, map_location=map_location, weights_only=weights_only)
     except TypeError:  # pragma: no cover — older PyTorch without weights_only
         return torch.load(path, map_location=map_location)
 

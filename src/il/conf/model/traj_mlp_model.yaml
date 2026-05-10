@@ -27,8 +27,8 @@ lr: 1.0e-3
 weight_decay: 1.0e-4
 # none | cosine | cosine_warmup（Linear warmup → Cosine）| step
 lr_scheduler: cosine_warmup
-cosine_t_max: 35000
-cosine_eta_min: 0.0e-6
+cosine_t_max: 40000
+cosine_eta_min: 1.0e-5
 # cosine_warmup：warmup 步数；warmup 期内 lr 从 lr×warmup_start_factor 线性升到 lr。
 warmup_steps: 500
 warmup_start_factor: 1.0e-8

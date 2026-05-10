@@ -48,13 +48,24 @@ class ModelCheckpoint(Callback):
         mode: str = "min",
         save_top_k: int = 1,
         filename: str = "{epoch:03d}-{step:08d}.ckpt",
+        every_n_epochs: int = 1,
     ) -> None:
+        """Checkpoint 回调。
+
+        Args:
+            mode: ``min`` / ``max`` 按 ``monitor`` 指标保留最优；``epoch`` 每隔固定 epoch 保存（忽略 ``monitor``）。
+            every_n_epochs: 仅 ``mode=="epoch"`` 时生效，每多少个 epoch 在验证结束后存盘一次（≥1）。
+            save_top_k: ``epoch`` 模式下保留最近 ``save_top_k`` 个定期快照；≤0 时不删旧文件。
+        """
         self.dirpath = Path(dirpath)
         self.dirpath.mkdir(parents=True, exist_ok=True)
         self.monitor = monitor
+        if mode not in ("min", "max", "epoch"):
+            raise ValueError(f"ModelCheckpoint.mode 应为 min、max 或 epoch，收到 {mode!r}")
         self.mode = mode
         self.save_top_k = save_top_k
         self.filename = filename
+        self.every_n_epochs = max(1, int(every_n_epochs))
         self.best: float | None = None
         self._saved: list[tuple[float, Path]] = []
 
@@ -66,23 +77,30 @@ class ModelCheckpoint(Callback):
         return current > self.best
 
     def on_validation_epoch_end(self, trainer: Any) -> None:
-        if self.monitor not in trainer.current_metrics:
-            return
-        score = float(trainer.current_metrics[self.monitor])
-        path = self.dirpath / self.filename.format(epoch=trainer.current_epoch, step=trainer.global_step)
-        if self.save_top_k <= 0:
+        path = self.dirpath / "final.ckpt"
+        trainer.save_checkpoint(path)
+        if self.mode == "epoch":
+            if (trainer.current_epoch + 1) % self.every_n_epochs != 0:
+                return
+            path = self.dirpath / self.filename.format(epoch=trainer.current_epoch, step=trainer.global_step)
             trainer.save_checkpoint(path)
-            return
-        if self._is_better(score) or len(self._saved) < self.save_top_k:
-            trainer.save_checkpoint(path)
-            self._saved.append((score, path))
-            self._saved.sort(key=lambda x: x[0], reverse=(self.mode == "max"))
-            self.best = self._saved[0][0]
-            while len(self._saved) > self.save_top_k:
-                _, p = self._saved.pop(-1)
-                if p.exists():
-                    p.unlink()
-
+        else:
+            if self.monitor not in trainer.current_metrics:
+                return
+            path = self.dirpath / f"{self.mode}_{self.filename.format(epoch=trainer.current_epoch, step=trainer.global_step)}"
+            score = float(trainer.current_metrics[self.monitor])
+            if self.save_top_k <= 0:
+                trainer.save_checkpoint(path)
+                return
+            if self._is_better(score) or len(self._saved) < self.save_top_k:
+                trainer.save_checkpoint(path)
+                self._saved.append((score, path))
+                self._saved.sort(key=lambda x: x[0], reverse=(self.mode == "max"))
+                self.best = self._saved[0][0]
+                while len(self._saved) > self.save_top_k:
+                    _, p = self._saved.pop(-1)
+                    if p.exists():
+                        p.unlink()
     def state_dict(self) -> dict[str, Any]:
         return {"best": self.best, "saved": [(s, str(p)) for s, p in self._saved]}
 

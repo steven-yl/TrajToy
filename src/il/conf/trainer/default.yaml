@@ -13,8 +13,9 @@ callbacks:
   - _target_: trainflow.callbacks.ModelCheckpoint
     dirpath: ${hydra:runtime.output_dir}/checkpoint
     monitor: val/loss
-    mode: min
+    mode: epoch
     save_top_k: 1
+    every_n_epochs: 10
   - _target_: trainflow.callbacks.TrainProgressBar
     leave: true
   - _target_: trainflow.callbacks.ValidationProgressBar

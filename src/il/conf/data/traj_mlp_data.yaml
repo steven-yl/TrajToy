@@ -6,8 +6,8 @@ batch_size: 64
 data_set:
   _target_: il.data.dataset.trajectory_dataset.TrajectoryDataset
   cfg_data_dirs:
-    # - data/20260502_021749/preprocessed
-    - data/20260510_135428/preprocessed
+    - data/20260502_021749/preprocessed
+    # - data/20260510_135428/preprocessed
   history_len: ${trainflow.model.traj_predictor.history_len}
   future_len: ${trainflow.model.traj_predictor.future_len}
   history_interval: 2
