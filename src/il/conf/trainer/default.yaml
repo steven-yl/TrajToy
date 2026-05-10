@@ -1,7 +1,7 @@
 _target_: trainflow.trainer.Trainer
 _convert_: "all"
 max_epochs: 300
-accelerator: cuda
+accelerator: auto
 devices: null
 precision: "32"
 strategy: none

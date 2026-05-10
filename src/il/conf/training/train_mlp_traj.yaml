@@ -7,7 +7,6 @@ defaults:
 
 run_mode: train # train, validate, test
 auto_load_checkpoint: false
-# resume_checkpoint: log/il_train_mlp_traj_fit_20260509_204841/checkpoint/081-00018696.ckpt
 resume_checkpoint: null
 strict: true
 weights_only: false

@@ -6,15 +6,17 @@ defaults:
 
 run_mode: close_eval
 auto_load_checkpoint: false
-resume_checkpoint: log/il_train_mlp_traj_fit_20260509_204841/checkpoint/081-00018696.ckpt
+resume_checkpoint: log/il_train_mlp_traj_train_20260510_111242/checkpoint/104-00013440.ckpt
 strict: true
 weights_only: false
 
 trainflow:
   data:
     data_set:
-      num_lane_dividers: 2
       use_local_coords: true
+      history_interval: 2
+      future_interval: 2
+      num_lane_dividers: 2
 
   controller:
     horizon: 15
@@ -27,7 +29,7 @@ trainflow:
     init_lateral_offset: 0.0
     init_heading_offset: 0.0
 
-    road_points_ahead: 60
+    road_points_ahead: 80
     include_road_obs: true
 
     render_mode: human
@@ -53,7 +55,7 @@ trainflow:
         heading_error: 0.0
         action_penalty: 5.0
         off_road_penalty: 10.0
-      target_speed: 20.0
+      target_speed: 10.0
 
     road_config:
       lane_width: 3.5
@@ -61,10 +63,10 @@ trainflow:
       points_per_meter: 1.0
       fixed_segments: null
       loop_segments: true
-      num_random_segments: 3
+      num_random_segments: 5
       segment_weights:
-        STRAIGHT: 7.0
-        CURVE: 3.0
+        STRAIGHT: 3.0
+        CURVE: 5.0
         INTERSECTION: 0.0
         SPLIT: 0.0
         MERGE: 0.0

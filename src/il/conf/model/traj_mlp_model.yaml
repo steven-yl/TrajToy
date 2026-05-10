@@ -20,7 +20,7 @@ loss_fn:
 # TrajMetrics configuration.
 metrics_fn:
   _target_: il.modules.metrics.traj_metrics.TrajMetrics
-  lon_fde_thresholds_m: (5.0, 15.0)
+  lon_fde_thresholds_m: [5.0, 15.0]
 
 # Optimizer & LR scheduler（TrainFlow 在每个 optimizer step 调用 scheduler.step()，步数均指更新步）。
 lr: 1.0e-3

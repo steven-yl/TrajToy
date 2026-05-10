@@ -2,7 +2,8 @@
 
 使用仿真 ``RoadVehicleEnv``、``VehicleMPC``，从 Hydra 读取配置；
 模型权重通过 ``trainflow.trainer.Trainer.load_checkpoint`` 加载；
-道路/历史特征构造复用 ``TrajectoryDataset`` 中的坐标与 pad 工具函数。
+道路/历史特征构造复用 ``TrajectoryDataset`` 中的坐标、pad、以及与训练一致的
+``history_interval`` 下采样与 ``history_mask``（前缀无效槽位为 0）。
 
 用法（示例）::
 
@@ -16,12 +17,14 @@ from typing import Any
 
 import numpy as np
 import torch
-from hydra.utils import instantiate
 from omegaconf import DictConfig, OmegaConf
 
 from il.data.dataset.trajectory_dataset import (
     _normalize_angle,
     _pad_or_truncate_2d,
+    _pad_or_truncate_mask,
+    _pad_or_truncate_seq,
+    _sample_sequence_with_interval,
     _to_local_coords,
 )
 from il.model.traj_mlp import TrajMLP
@@ -34,6 +37,8 @@ def _scoped_train_cfg(cfg: DictConfig) -> DictConfig:
     """解析包含 ``trainflow.model`` 的配置节点（根节点或 ``training`` 打包）。"""
     if OmegaConf.select(cfg, "trainflow.model") is not None:
         return cfg
+    if OmegaConf.select(cfg, "training.trainflow.model") is not None:
+        return cfg.training
     raise ValueError(
         "缺少 trainflow.model：请在 Hydra 配置中提供 trainflow.model，"
         "或使用 training@ 加载含 trainflow 的训练配置。"
@@ -66,11 +71,12 @@ def _controller_cfg(scfg: DictConfig) -> DictConfig:
     return OmegaConf.create(OmegaConf.to_container(node, resolve=True))
 
 
-def _data_defaults(scfg: DictConfig) -> tuple[bool, int]:
+def _data_defaults(scfg: DictConfig) -> tuple[bool, int, int]:
     ds = OmegaConf.select(scfg, "trainflow.data.data_set")
     use_local = bool(OmegaConf.select(ds, "use_local_coords", default=True))
     n_div = int(OmegaConf.select(ds, "num_lane_dividers", default=2))
-    return use_local, n_div
+    hist_iv = max(1, int(OmegaConf.select(ds, "history_interval", default=1)))
+    return use_local, n_div, hist_iv
 
 
 def _target_speed(scfg: DictConfig, env_cfg: DictConfig) -> float:
@@ -90,6 +96,7 @@ def load_model_from_checkpoint(scfg: DictConfig) -> Any:
     strict, weights_only = resolve_strict_weights_only(scfg)
     trainer.load_checkpoint(ckpt_path, strict=strict, weights_only=weights_only)
     trainer.model.to(trainer.device)
+    trainer.model.eval()
     print(f"已加载模型权重: {ckpt_path}")
     return trainer, trainer.model
 
@@ -102,12 +109,23 @@ def _build_model_inputs(
     use_local_coords: bool,
     num_lane_dividers: int,
     target_speed_fill: float,
+    history_interval: int,
 ) -> dict[str, np.ndarray]:
-    h_len = int(traj_predictor_cfg.history_len) + 1
+    """与 ``TrajectoryDataset._convert`` 一致：对原始仿真历史做 interval 下采样再 pad + mask。"""
+    h_slots = int(traj_predictor_cfg.history_len) + 1
     n_points = int(traj_predictor_cfg.road_points)
 
-    history = np.asarray(history_buf, dtype=np.float32)
-    history_mask = np.ones(h_len, dtype=np.float32)
+    hist_raw_buf = np.asarray(history_buf, dtype=np.float32)
+    hist_mask_buf = np.ones(hist_raw_buf.shape[0], dtype=np.float32)
+
+    hist_sub, mask_sub = _sample_sequence_with_interval(
+        hist_raw_buf, hist_mask_buf, history_interval, from_tail=True,
+    )
+    if hist_sub is None:
+        raise RuntimeError("history_buf 转为序列失败")
+    history = _pad_or_truncate_seq(hist_sub, h_slots, from_tail=True)
+    history_mask_np = _pad_or_truncate_mask(mask_sub, h_slots, from_tail=True)
+    history_mask = history_mask_np.astype(np.float32)
 
     ego_xy_world = history[-1, :2].copy()
     ego_theta_world = float(history[-1, 2])
@@ -224,10 +242,22 @@ def _build_eval_env(scfg: DictConfig) -> tuple[RoadVehicleEnv, VehicleMPC]:
     return env, controller
 
 
-def _init_history_buffer(obs: dict[str, Any], history_len: int) -> list[np.ndarray]:
+def _raw_history_capacity(history_len: int, history_interval: int) -> int:
+    """与训练侧一致：保留足够原始步，使 ``from_tail`` 下采样后能填满 ``history_len+1`` 槽位。"""
+    h = int(history_len)
+    s = max(1, int(history_interval))
+    return h * s + 1
+
+
+def _init_history_buffer(
+    obs: dict[str, Any],
+    history_len: int,
+    history_interval: int,
+) -> list[np.ndarray]:
     veh = obs["vehicle"]
     init_state7 = np.array([veh[0], veh[1], veh[2], veh[3], veh[4], 0.0, 0.0], dtype=np.float32)
-    return [init_state7.copy() for _ in range(history_len + 1)]
+    cap = _raw_history_capacity(history_len, history_interval)
+    return [init_state7.copy() for _ in range(cap)]
 
 
 def _build_road_overlays(obs: dict[str, Any]) -> list[dict[str, Any]]:
@@ -279,13 +309,14 @@ def _run_single_episode(
     use_local_coords: bool,
     num_lane_dividers: int,
     target_speed_fill: float,
+    history_interval: int,
     device: torch.device,
 ) -> tuple[float, float, int]:
     obs, info = env.reset(seed=1000 + ep)
     controller.reset()
     history_len = int(traj_predictor_cfg.history_len)
-    history_buf = _init_history_buffer(obs, history_len)
-    expected_buf_len = history_len + 1
+    history_buf = _init_history_buffer(obs, history_len, history_interval)
+    expected_buf_len = _raw_history_capacity(history_len, history_interval)
 
     ep_ret = 0.0
     final_progress = 0.0
@@ -304,6 +335,7 @@ def _run_single_episode(
             use_local_coords,
             num_lane_dividers,
             target_speed_fill,
+            history_interval,
         )
         ref_path, target_speed = _predict_ref_path(model, model_inputs, use_local_coords, device)
 
@@ -376,7 +408,7 @@ def evaluate_closed_loop(cfg: DictConfig) -> None:
     env, controller = _build_eval_env(scfg)
 
     traj_predictor_cfg = scfg.trainflow.model.traj_predictor
-    use_local_coords, num_lane_dividers = _data_defaults(scfg)
+    use_local_coords, num_lane_dividers, history_interval = _data_defaults(scfg)
     env_node = _env_cfg(scfg)
     target_speed_fill = _target_speed(scfg, env_node)
 
@@ -392,6 +424,7 @@ def evaluate_closed_loop(cfg: DictConfig) -> None:
             use_local_coords=use_local_coords,
             num_lane_dividers=num_lane_dividers,
             target_speed_fill=target_speed_fill,
+            history_interval=history_interval,
             device=device,
         )
         print(f"[EP 1] return={ep_ret:.2f}, progress={final_progress:.3f}, steps={steps}")
