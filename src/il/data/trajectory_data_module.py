@@ -1,20 +1,18 @@
-"""轨迹数据：``TrajectoryDataset`` + TrainFlow ``DataModule`` 封装。"""
+"""轨迹数据：PyTorch ``Dataset`` + TrainFlow ``DataModule`` 封装。"""
 
 from __future__ import annotations
 
 from typing import Optional
 
-from torch.utils.data import DataLoader, Subset
+from torch.utils.data import DataLoader, Dataset, Subset
 
 from trainflow.data import DataModule
-
-from il.data.dataset.trajectory_dataset import TrajectoryDataset
 
 
 class TrajectoryDataModule(DataModule):
     """划分 train/val/test 并构造 DataLoader。
 
-    构造时传入已配置好的 ``TrajectoryDataset`` 实例（``data_set``），本模块仅负责
+    构造时传入已配置好的 ``torch.utils.data.Dataset`` 实例（``data_set``），本模块仅负责
     ``dm_cfg_*``：划分比例与 DataLoader 参数。
     """
 
@@ -24,7 +22,7 @@ class TrajectoryDataModule(DataModule):
         val_ratio: float,
         batch_size: int,
         num_workers: int,
-        data_set: TrajectoryDataset,
+        data_set: Dataset,
     ) -> None:
         super().__init__()
         self._data_set = data_set
@@ -32,7 +30,7 @@ class TrajectoryDataModule(DataModule):
         self._val_ratio = float(val_ratio)
         self._batch_size = int(batch_size)
         self._num_workers = int(num_workers)
-        self._full_ds: TrajectoryDataset | None = None
+        self._full_ds: Dataset | None = None
         self._train_ds: Subset | None = None
         self._val_ds: Subset | None = None
         self._test_ds: Subset | None = None

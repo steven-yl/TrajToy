@@ -5,7 +5,9 @@ defaults:
   - /model@trainflow.model: traj_mlp_model
   - _self_
 
+run_mode: train # train, validate, test
 auto_load_checkpoint: false
-resume_checkpoint: null #log/il_train_mlp_traj_fit_20260509_165402/checkpoint/008-00000495.ckpt
+# resume_checkpoint: log/il_train_mlp_traj_fit_20260509_204841/checkpoint/081-00018696.ckpt
+resume_checkpoint: null
 strict: true
 weights_only: false

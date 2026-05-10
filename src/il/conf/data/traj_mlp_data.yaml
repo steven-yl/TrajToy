@@ -1,16 +1,16 @@
 _target_: il.data.trajectory_data_module.TrajectoryDataModule
-train_ratio: 0.8
+train_ratio: 0.9
 val_ratio: 0.1
 num_workers: 0
-batch_size: 32
+batch_size: 64
 data_set:
   _target_: il.data.dataset.trajectory_dataset.TrajectoryDataset
   cfg_data_dirs:
-    - data/20260506_164000/preprocessed
-  history_len: 5
-  future_len: 25
+    - data/20260502_021749/preprocessed
+  history_len: ${trainflow.model.traj_predictor.history_len}
+  future_len: ${trainflow.model.traj_predictor.future_len}
   history_interval: 2
   future_interval: 2
-  road_points: 60
+  road_points: ${trainflow.model.traj_predictor.road_points}
   num_lane_dividers: 2
   use_local_coords: true

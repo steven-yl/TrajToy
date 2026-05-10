@@ -234,6 +234,18 @@ class Trainer:
         if self.strategy.is_global_zero:
             self.logger.log_metrics(reduced, step=self.global_step)
 
+    def _current_lr_metrics(self, prefix: str) -> dict[str, float]:
+        """当前各 optimizer param_group 的学习率，便于写入 CSV / TensorBoard。"""
+        out: dict[str, float] = {}
+        if not self.optimizers:
+            return out
+        for oi, opt in enumerate(self.optimizers):
+            base = f"{prefix}/lr" if len(self.optimizers) == 1 else f"{prefix}/lr_opt{oi}"
+            for pi, pg in enumerate(opt.param_groups):
+                key = base if len(opt.param_groups) == 1 else f"{base}_pg{pi}"
+                out[key] = float(pg["lr"])
+        return out
+
     def _setup_fit(self) -> None:
         self.datamodule.prepare_data()
         self.datamodule.setup(stage="fit")
@@ -303,7 +315,9 @@ class Trainer:
             self.global_step += 1
             self._call("on_train_batch_end", output, batch, batch_idx)
             if metrics and self.global_step % self.log_every_n_steps == 0:
-                self.log({f"train/{k}": float(v) for k, v in metrics.items()})
+                row = {f"train/{k}": float(v) for k, v in metrics.items()}
+                row.update(self._current_lr_metrics("train"))
+                self.log(row)
         self._call("on_train_epoch_end")
 
     def _optimizer_step(self) -> None:

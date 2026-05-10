@@ -1,8 +1,0 @@
-
-defaults:
-  - /modules/model@traj_predictor: traj_mlp
-  - _self_
-
-checkpoint_path: log/il_train_mlp_traj_20260508_195829/checkpoint/009-00000550.ckpt
-strict: true
-weights_only: true

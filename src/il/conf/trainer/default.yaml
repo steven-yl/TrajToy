@@ -1,7 +1,7 @@
 _target_: trainflow.trainer.Trainer
 _convert_: "all"
-max_epochs: 100
-accelerator: auto
+max_epochs: 300
+accelerator: cuda
 devices: null
 precision: "32"
 strategy: none
@@ -28,9 +28,9 @@ callbacks:
     verbose: false
   - _target_: il.callback.traj_mlp_callback.TrajVisualizationCallback
     log_every_n_epochs: 1
-    num_samples: 4
+    num_samples: 2
     tag: val_vis/trajectory
-    ncols: 2
+    ncols: 1
 logger:
   - _target_: trainflow.loggers.CSVLogger
     save_dir: ${hydra:runtime.output_dir}/metrics

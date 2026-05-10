@@ -20,7 +20,18 @@ loss_fn:
 # TrajMetrics configuration.
 metrics_fn:
   _target_: il.modules.metrics.traj_metrics.TrajMetrics
+  lon_fde_thresholds_m: (5.0, 15.0)
 
-# Optimizer hyperparameters (used in TrajMLP.configure_optimizers).
+# Optimizer & LR scheduler（TrainFlow 在每个 optimizer step 调用 scheduler.step()，步数均指更新步）。
 lr: 1.0e-3
 weight_decay: 1.0e-4
+# none | cosine | cosine_warmup（Linear warmup → Cosine）| step
+lr_scheduler: cosine_warmup
+cosine_t_max: 35000
+cosine_eta_min: 0.0e-6
+# cosine_warmup：warmup 步数；warmup 期内 lr 从 lr×warmup_start_factor 线性升到 lr。
+warmup_steps: 500
+warmup_start_factor: 1.0e-8
+# step：每隔 lr_step_size 步乘以 lr_gamma。
+lr_step_size: 30
+lr_gamma: 0.5

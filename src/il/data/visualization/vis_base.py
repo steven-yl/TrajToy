@@ -41,7 +41,7 @@ class VisualizerBase(ABC):
         dpi: int | None = None,
         title: str | list[str] | None = None,
         save_path: str | Path | None = None,
-        show: bool = True,
+        show: bool = False,
         ax: Axes | None = None,
         ncols: int = 2,
         close: bool = True,

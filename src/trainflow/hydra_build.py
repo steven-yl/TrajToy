@@ -20,7 +20,7 @@ def _require_hydra() -> None:
         ) from _HYDRA_IMPORT_ERROR
 
 
-def _resolve_strict_weights_only(cfg: DictConfig) -> tuple[bool, bool]:
+def resolve_strict_weights_only(cfg: DictConfig) -> tuple[bool, bool]:
     """Match IL YAML keys ``strict`` / ``weights_only`` or ``checkpoint_*`` variants."""
     strict = OmegaConf.select(cfg, "checkpoint_strict")
     if strict is None:
@@ -31,13 +31,13 @@ def _resolve_strict_weights_only(cfg: DictConfig) -> tuple[bool, bool]:
     return bool(strict), bool(weights_only)
 
 
-def _fit_resume_checkpoint_path(cfg: DictConfig) -> Any | None:
+def fit_resume_checkpoint_path(cfg: DictConfig) -> Any | None:
     if bool(cfg.get("auto_load_checkpoint", False)):
         return OmegaConf.select(cfg, "resume_checkpoint")
     return OmegaConf.select(cfg, "resume_checkpoint")
 
 
-def instantiate_model_and_datamodule(cfg: DictConfig) -> tuple[Any, Any]:
+def instantiate_trainer_and_model(cfg: DictConfig) -> tuple[Any, Any]:
     _require_hydra()
     if not OmegaConf.is_config(cfg):
         raise TypeError("cfg must be an OmegaConf DictConfig")
@@ -45,20 +45,20 @@ def instantiate_model_and_datamodule(cfg: DictConfig) -> tuple[Any, Any]:
     tf = cfg.get("trainflow")
     if tf is None:
         raise ValueError(
-            "Missing config key `trainflow`. Add `trainflow.model`, "
+            "Missing config key `trainflow`. Add `trainflow.trainer`, `trainflow.model`, "
             "`trainflow.data` (each with `_target_`)."
         )
 
     model_cfg = tf.get("model")
-    data_cfg = tf.get("data")
-    if model_cfg is None or data_cfg is None:
+    trainer_cfg = tf.get("trainer")
+    if model_cfg is None or trainer_cfg is None:
         raise ValueError(
-            "`trainflow` must define `model` and `data` subconfigs."
+            "`trainflow` must define `model` and `trainer` subconfigs."
         )
 
     model = instantiate(model_cfg, _recursive_=True)
-    datamodule = instantiate(data_cfg, _recursive_=True)
-    return model, datamodule
+    trainer = instantiate(trainer_cfg, _recursive_=True)
+    return trainer, model
 
 
 def instantiate_trainflow(cfg: DictConfig) -> tuple[Any, Any, Any]:
@@ -109,11 +109,11 @@ def run_fit(cfg: DictConfig) -> None:
     ``auto_load_checkpoint`` is true with ``checkpoint_path``.
     """
     trainer, model, datamodule = instantiate_trainflow(cfg)
-    ckpt = _fit_resume_checkpoint_path(cfg)
+    ckpt = fit_resume_checkpoint_path(cfg)
     if ckpt is None:
         trainer.fit(model, datamodule)
         return
-    strict, weights_only = _resolve_strict_weights_only(cfg)
+    strict, weights_only = resolve_strict_weights_only(cfg)
     trainer.fit(
         model,
         datamodule,
@@ -128,10 +128,10 @@ def run_validate(cfg: DictConfig) -> None:
     trainer, model, datamodule = instantiate_trainflow(cfg)
     trainer.model = model
     trainer.datamodule = datamodule
-    ckpt = _fit_resume_checkpoint_path(cfg)
+    ckpt = fit_resume_checkpoint_path(cfg)
     if ckpt is None:
         raise ValueError("Missing config key `resume_checkpoint` (required for validate).")
-    strict, weights_only = _resolve_strict_weights_only(cfg)
+    strict, weights_only = resolve_strict_weights_only(cfg)
     trainer.load_checkpoint(ckpt, strict=strict, weights_only=weights_only)
     metrics = trainer.validate()
     print("validate done!")
@@ -143,10 +143,10 @@ def run_test(cfg: DictConfig) -> None:
     trainer, model, datamodule = instantiate_trainflow(cfg)
     trainer.model = model
     trainer.datamodule = datamodule
-    ckpt = _fit_resume_checkpoint_path(cfg)
+    ckpt = fit_resume_checkpoint_path(cfg)
     if ckpt is None:
         raise ValueError("Missing config key `resume_checkpoint` (required for test).")
-    strict, weights_only = _resolve_strict_weights_only(cfg)
+    strict, weights_only = resolve_strict_weights_only(cfg)
     trainer.load_checkpoint(ckpt, strict=strict, weights_only=weights_only)
     metrics = trainer.test()
     print("test done!")
@@ -157,10 +157,10 @@ def run_predict(cfg: DictConfig) -> list[Any]:
     trainer, model, datamodule = instantiate_trainflow(cfg)
     trainer.model = model
     trainer.datamodule = datamodule
-    ckpt = _fit_resume_checkpoint_path(cfg)
+    ckpt = fit_resume_checkpoint_path(cfg)
     if ckpt is None:
         raise ValueError("Missing config key `resume_checkpoint` (required for predict).")
-    strict, weights_only = _resolve_strict_weights_only(cfg)
+    strict, weights_only = resolve_strict_weights_only(cfg)
     trainer.load_checkpoint(ckpt, strict=strict, weights_only=weights_only)
     outputs = trainer.predict()
     print("predict done!")
