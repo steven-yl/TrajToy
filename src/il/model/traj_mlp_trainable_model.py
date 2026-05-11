@@ -60,7 +60,7 @@ def _build_lr_scheduler(
 class TrajMlpTrainableModel(TrainableModel):
     def __init__(
         self,
-        model: nn.Module,
+        predictor: nn.Module,
         loss_fn: Loss,
         metrics_fn: Metrics,
         lr: float = 1e-3,
@@ -83,7 +83,7 @@ class TrajMlpTrainableModel(TrainableModel):
         self.warmup_start_factor = float(warmup_start_factor)
         self.lr_step_size = int(lr_step_size)
         self.lr_gamma = float(lr_gamma)
-        self.traj_mlp = model
+        self.predictor = predictor
         self.loss_fn = loss_fn
         self.metrics_fn = metrics_fn
 
@@ -110,7 +110,7 @@ class TrajMlpTrainableModel(TrainableModel):
 
 
     def _predict(self, batch: dict[str, torch.Tensor]) -> torch.Tensor:
-        return self.traj_mlp(
+        return self.predictor(
             history=batch["history"],
             history_mask=batch["history_mask"],
             centerline=batch["centerline"],

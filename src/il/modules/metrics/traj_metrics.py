@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import torch
 
-from il.modules.metrics.metrics import Metric
+from il.modules.metrics.metrics import Metrics
 
 
 def _last_valid_idx(mask: torch.Tensor) -> torch.Tensor:
@@ -51,7 +51,7 @@ def _lon_fde_metric_key(dist_m: float) -> str:
     return f"xy_fde_lon_{s}m"
 
 
-class TrajMetrics(Metric):
+class TrajMetrics(Metrics):
     def __init__(self, lon_fde_thresholds_m: tuple[float, ...] | list[float] = (5.0, 15.0)) -> None:
         super().__init__()
         self._lon_fde_thresholds_m = tuple(float(x) for x in lon_fde_thresholds_m)

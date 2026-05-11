@@ -1,4 +1,4 @@
-"""轨迹评估指标：TorchMetrics 风格的 Metric 基类"""
+"""轨迹评估指标：TorchMetrics 风格的 Metrics 基类"""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ import torch.nn as nn
 # ── TorchMetrics 风格基类 ────────────────────────────────────────────
 
 
-class Metric(nn.Module, ABC):
+class Metrics(nn.Module, ABC):
     def __init__(self):
         super().__init__()
         

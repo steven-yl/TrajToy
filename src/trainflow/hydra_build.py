@@ -108,6 +108,7 @@ def run_fit(cfg: DictConfig) -> None:
     """Instantiate trainflow and run ``fit``. Resume when ``resume_checkpoint`` is set or
     ``auto_load_checkpoint`` is true with ``checkpoint_path``.
     """
+    print("start train...")
     trainer, model, datamodule = instantiate_trainflow(cfg)
     ckpt = fit_resume_checkpoint_path(cfg)
     if ckpt is None:
@@ -121,7 +122,7 @@ def run_fit(cfg: DictConfig) -> None:
         ckpt_strict=strict,
         ckpt_weights_only=weights_only,
     )
-
+    print("train done!")
 
 def run_validate(cfg: DictConfig) -> None:
     print("start validate...")

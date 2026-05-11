@@ -17,8 +17,8 @@ import torch.nn as nn
 from il.modules.model.utils.state_encoder import PositionalEncoding, StateEncoder
 
 
-class MLPTrajModel(nn.Module):
-    """Transformer 编码器-解码器轨迹预测模型。"""
+class TrajMlpModel(nn.Module):
+    """TrajMlp trajectory predictor model."""
 
     def __init__(
         self,

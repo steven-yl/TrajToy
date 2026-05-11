@@ -1,4 +1,4 @@
-_target_: il.modules.model.mlp.mlp_traj_model.MLPTrajModel
+_target_: il.modules.model.mlp.traj_mlp_model.TrajMlpModel
 cfg_history_state_dim: 7
 cfg_road_feature_dim: 2
 cfg_hidden_dim: 128

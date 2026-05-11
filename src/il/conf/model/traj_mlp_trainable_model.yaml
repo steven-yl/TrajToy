@@ -1,12 +1,12 @@
 defaults:
-  - /modules/model@net_model: mlp_traj_model
+  - /modules/model@predictor: traj_mlp_model
   - _self_
 
 _target_: il.model.traj_mlp_trainable_model.TrajMlpTrainableModel
 _convert_: all
 
-# MLP trajectory predictor configuration (overrides on top of /modules/model/mlp_traj).
-model:
+# TrajMlp trajectory predictor configuration (overrides on top of /modules/model/traj_mlp_model).
+predictor:
   history_len: 5
   future_len: 25
   road_points: 60

@@ -27,7 +27,7 @@ from il.data.dataset.trajectory_dataset import (
     _sample_sequence_with_interval,
     _to_local_coords,
 )
-from il.model.traj_mlp import TrajMlpTrainableModel
+from il.model.traj_mlp_trainable_model import TrajMlpTrainableModel
 from sim_env.road_vehicle_env import RoadVehicleEnv
 from sim_env.vehicle_controller import VehicleMPC
 from trainflow.hydra_build import instantiate_trainer_and_model, resolve_strict_weights_only
@@ -105,15 +105,15 @@ def _build_model_inputs(
     history_buf: list[np.ndarray],
     obs: dict[str, Any],
     info: dict[str, Any],
-    traj_predictor_cfg: DictConfig,
+    predictor_cfg: DictConfig,
     use_local_coords: bool,
     num_lane_dividers: int,
     target_speed_fill: float,
     history_interval: int,
 ) -> dict[str, np.ndarray]:
     """与 ``TrajectoryDataset._convert`` 一致：对原始仿真历史做 interval 下采样再 pad + mask。"""
-    h_slots = int(traj_predictor_cfg.history_len) + 1
-    n_points = int(traj_predictor_cfg.road_points)
+    h_slots = int(predictor_cfg.history_len) + 1
+    n_points = int(predictor_cfg.road_points)
 
     hist_raw_buf = np.asarray(history_buf, dtype=np.float32)
     hist_mask_buf = np.ones(hist_raw_buf.shape[0], dtype=np.float32)
@@ -203,10 +203,10 @@ def _predict_ref_path(
     use_local_coords: bool,
     device: torch.device,
 ) -> tuple[np.ndarray, float]:
-    core = model.traj_mlp
+    predictor = model.predictor
     with torch.no_grad():
         batch = _build_torch_batch(model_inputs, device)
-        pred = core(
+        pred = predictor(
             history=batch["history"],
             history_mask=batch["history_mask"],
             centerline=batch["centerline"],
@@ -305,7 +305,7 @@ def _run_single_episode(
     env: RoadVehicleEnv,
     controller: VehicleMPC,
     scfg: DictConfig,
-    traj_predictor_cfg: DictConfig,
+    predictor_cfg: DictConfig,
     use_local_coords: bool,
     num_lane_dividers: int,
     target_speed_fill: float,
@@ -314,7 +314,7 @@ def _run_single_episode(
 ) -> tuple[float, float, int]:
     obs, info = env.reset(seed=1000 + ep)
     controller.reset()
-    history_len = int(traj_predictor_cfg.history_len)
+    history_len = int(predictor_cfg.history_len)
     history_buf = _init_history_buffer(obs, history_len, history_interval)
     expected_buf_len = _raw_history_capacity(history_len, history_interval)
 
@@ -331,7 +331,7 @@ def _run_single_episode(
             history_buf,
             obs,
             info,
-            traj_predictor_cfg,
+            predictor_cfg,
             use_local_coords,
             num_lane_dividers,
             target_speed_fill,
@@ -407,7 +407,7 @@ def evaluate_closed_loop(cfg: DictConfig) -> None:
     device = trainer.device
     env, controller = _build_eval_env(scfg)
 
-    traj_predictor_cfg = scfg.trainflow.model.traj_predictor
+    predictor_cfg = scfg.trainflow.model.predictor
     use_local_coords, num_lane_dividers, history_interval = _data_defaults(scfg)
     env_node = _env_cfg(scfg)
     target_speed_fill = _target_speed(scfg, env_node)
@@ -420,7 +420,7 @@ def evaluate_closed_loop(cfg: DictConfig) -> None:
             env=env,
             controller=controller,
             scfg=scfg,
-            traj_predictor_cfg=traj_predictor_cfg,
+            predictor_cfg=predictor_cfg,
             use_local_coords=use_local_coords,
             num_lane_dividers=num_lane_dividers,
             target_speed_fill=target_speed_fill,

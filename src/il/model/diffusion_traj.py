@@ -8,7 +8,7 @@ import torch
 
 from trainflow.model import TrainableModel
 from il.modules.loss.loss import Loss
-from il.modules.metrics.metrics import Metric
+from il.modules.metrics.metrics import Metrics
 
 
 
@@ -64,7 +64,7 @@ class TrajMlpTrainableModel(TrainableModel):
         self,
         traj_predictor: torch.nn.Module,
         loss_fn: Loss,
-        metrics_fn: Metric,
+        metrics_fn: Metrics,
         lr: float = 1e-3,
         weight_decay: float = 1e-4,
         lr_scheduler: str = "cosine",
