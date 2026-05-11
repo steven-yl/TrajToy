@@ -5,12 +5,10 @@ from __future__ import annotations
 from typing import Any
 
 import torch
-
+import torch.nn as nn
 from trainflow.model import TrainableModel
-from il.modules.loss.traj_loss import TrajLoss
-from il.modules.metrics.traj_metrics import TrajMetrics
-from il.modules.model.mlp.mlp_trajectory_predictor import MLPTrajectoryPredictor
-
+from il.modules.loss.traj_loss import Loss
+from il.modules.metrics.traj_metrics import Metrics
 
 def _build_lr_scheduler(
     optimizer: torch.optim.Optimizer,
@@ -59,12 +57,12 @@ def _build_lr_scheduler(
     )
 
 
-class TrajMLP(TrainableModel):
+class TrajMlpTrainableModel(TrainableModel):
     def __init__(
         self,
-        traj_predictor: MLPTrajectoryPredictor,
-        loss_fn: TrajLoss,
-        metrics_fn: TrajMetrics,
+        model: nn.Module,
+        loss_fn: Loss,
+        metrics_fn: Metrics,
         lr: float = 1e-3,
         weight_decay: float = 1e-4,
         lr_scheduler: str = "cosine",
@@ -85,7 +83,7 @@ class TrajMLP(TrainableModel):
         self.warmup_start_factor = float(warmup_start_factor)
         self.lr_step_size = int(lr_step_size)
         self.lr_gamma = float(lr_gamma)
-        self.traj_mlp = traj_predictor
+        self.traj_mlp = model
         self.loss_fn = loss_fn
         self.metrics_fn = metrics_fn
 

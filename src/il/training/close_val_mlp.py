@@ -27,7 +27,7 @@ from il.data.dataset.trajectory_dataset import (
     _sample_sequence_with_interval,
     _to_local_coords,
 )
-from il.model.traj_mlp import TrajMLP
+from il.model.traj_mlp import TrajMlpTrainableModel
 from sim_env.road_vehicle_env import RoadVehicleEnv
 from sim_env.vehicle_controller import VehicleMPC
 from trainflow.hydra_build import instantiate_trainer_and_model, resolve_strict_weights_only
@@ -89,7 +89,7 @@ def _target_speed(scfg: DictConfig, env_cfg: DictConfig) -> float:
 
 
 def load_model_from_checkpoint(scfg: DictConfig) -> Any:
-    """使用 TrainFlow Trainer 的 checkpoint 逻辑实例化 ``TrajMLP`` 并加载权重。"""
+    """使用 TrainFlow Trainer 的 checkpoint 逻辑实例化 ``TrajMlpTrainableModel`` 并加载权重。"""
     trainer, model = instantiate_trainer_and_model(scfg)
     trainer.model = model
     ckpt_path = _checkpoint_path(scfg)
@@ -198,7 +198,7 @@ def _build_torch_batch(model_inputs: dict[str, np.ndarray], device: torch.device
 
 
 def _predict_ref_path(
-    model: TrajMLP,
+    model: TrajMlpTrainableModel,
     model_inputs: dict[str, np.ndarray],
     use_local_coords: bool,
     device: torch.device,
@@ -301,7 +301,7 @@ def _build_road_overlays(obs: dict[str, Any]) -> list[dict[str, Any]]:
 
 def _run_single_episode(
     ep: int,
-    model: TrajMLP,
+    model: TrajMlpTrainableModel,
     env: RoadVehicleEnv,
     controller: VehicleMPC,
     scfg: DictConfig,

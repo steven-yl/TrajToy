@@ -2,7 +2,7 @@
 defaults:
   - /trainer@trainflow.trainer: default
   - /data@trainflow.data: traj_mlp_data
-  - /model@trainflow.model: traj_mlp_model
+  - /model@trainflow.model: traj_mlp_trainable_model
   - _self_
 
 run_mode: train # train, validate, test
