@@ -22,38 +22,38 @@ class TrajMlpModel(nn.Module):
 
     def __init__(
         self,
-        cfg_history_state_dim: int,
-        cfg_road_feature_dim: int,
-        cfg_hidden_dim: int,
-        cfg_num_encoder_layers: int,
-        cfg_num_decoder_layers: int,
-        cfg_num_heads: int,
-        cfg_dropout: float,
+        history_state_dim: int,
+        road_feature_dim: int,
+        hidden_dim: int,
+        num_encoder_layers: int,
+        num_decoder_layers: int,
+        num_heads: int,
+        dropout: float,
         history_len: int,
         future_len: int,
         road_points: int,
     ) -> None:
         super().__init__()
-        hidden = int(cfg_hidden_dim)
-        dropout = float(cfg_dropout)
+        hidden = int(hidden_dim)
+        dropout = float(dropout)
 
         # 状态编码器
         self.state_encoder = StateEncoder(
-            cfg_history_state_dim=int(cfg_history_state_dim),
-            cfg_road_feature_dim=int(cfg_road_feature_dim),
-            cfg_hidden_dim=hidden,
-            cfg_dropout=dropout,
+            history_state_dim=int(history_state_dim),
+            road_feature_dim=int(road_feature_dim),
+            hidden_dim=hidden,
+            dropout=dropout,
             history_len=int(history_len),
             road_points=int(road_points),
         )
 
         # Encoder
         enc_layer = nn.TransformerEncoderLayer(
-            d_model=hidden, nhead=int(cfg_num_heads),
+            d_model=hidden, nhead=int(num_heads),
             dim_feedforward=hidden * 4, dropout=dropout,
             batch_first=True, norm_first=True,
         )
-        self.encoder = nn.TransformerEncoder(enc_layer, num_layers=int(cfg_num_encoder_layers))
+        self.encoder = nn.TransformerEncoder(enc_layer, num_layers=int(num_encoder_layers))
 
         # 可学习未来查询
         self.future_queries = nn.Parameter(torch.randn(1, int(future_len), hidden) * 0.02)
@@ -61,11 +61,11 @@ class TrajMlpModel(nn.Module):
 
         # Decoder
         dec_layer = nn.TransformerDecoderLayer(
-            d_model=hidden, nhead=int(cfg_num_heads),
+            d_model=hidden, nhead=int(num_heads),
             dim_feedforward=hidden * 4, dropout=dropout,
             batch_first=True, norm_first=True,
         )
-        self.decoder = nn.TransformerDecoder(dec_layer, num_layers=int(cfg_num_decoder_layers))
+        self.decoder = nn.TransformerDecoder(dec_layer, num_layers=int(num_decoder_layers))
 
         # 输出头：xy (2), heading (1), velocity (1)
         self.xy_head = nn.Sequential(

@@ -10,7 +10,7 @@ import torch
 from torch.utils.data import Dataset
 
 from data_process.process.data_preprocess import TrainingSample
-
+from il.modules.utis.normalizer import Normalizer
 
 # ── 坐标工具 ─────────────────────────────────────────────────────────
 
@@ -121,6 +121,7 @@ class TrajectoryDataset(Dataset):
         use_local_coords: bool,
         history_interval: int = 1,
         future_interval: int = 1,
+        normalizer: Normalizer | None = None,
     ) -> None:
         self._history_len = int(history_len)
         self._future_len = int(future_len)
@@ -129,6 +130,7 @@ class TrajectoryDataset(Dataset):
         self._road_points = int(road_points)
         self._num_lane_dividers = int(num_lane_dividers)
         self._use_local_coords = bool(use_local_coords)
+        self._normalizer = normalizer
         # self._history_len_warned = False
         # self._future_len_warned = False
         data_dirs = self._resolve_data_dirs(cfg_data_dirs)
@@ -220,7 +222,7 @@ class TrajectoryDataset(Dataset):
         max_v = _pad_or_truncate_seq(s.centerline_max_v, self._road_points)
         max_v_mask = _pad_or_truncate_mask(s.centerline_max_v_mask, self._road_points)
 
-        return {
+        out: dict[str, torch.Tensor] = {
             "vehicle_params": torch.from_numpy(vp_arr),
             "history": torch.from_numpy(history),
             "history_mask": torch.from_numpy(history_mask),
@@ -230,6 +232,9 @@ class TrajectoryDataset(Dataset):
             "max_v": torch.from_numpy(max_v),
             "max_v_mask": torch.from_numpy(max_v_mask),
         }
+        if self._normalizer is not None:
+            out = self._normalizer.apply(out, inverse=False)
+        return out
 
     @staticmethod
     def _to_local_history(arr: np.ndarray, ego_xy: np.ndarray, ego_theta: float) -> np.ndarray:

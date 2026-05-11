@@ -15,27 +15,37 @@ This file contains the core components:
 
 import torch
 import torch.nn as nn
+from typing import Any
 from typing import Dict
-from .modules.model import ModelMixin
-from .modules.conditione_block import FiLMConditionedResidualBlock
-from .modules.state_encoder import StateClsEncoder
-from .modules.embedding_block import SinusoidalTimeEmbedding
+from typing import Sequence
+from il.modules.model.utils.conditione_block import FiLMConditionedResidualBlock
+from il.modules.model.utils.state_encoder import StateClsEncoder
+from il.modules.model.utils.embedding_block import SinusoidalTimeEmbedding
 
 class ConditionalUNet1D(nn.Module):
     """
     The main model. It takes a noisy trajectory, a timestep, and the scene context,
     and predicts the noise that was added to the trajectory.
     """
-    def __init__(self, config: Dict):
+    def __init__(
+        self,
+        prediction_state_dim: int = 4,
+        future_len: int = 25,
+        time_embed_dim: int = 128,
+        scene_embed_dim: int = 128,
+        down_dims: Sequence[int] = (64, 128, 256),
+        history_state_dim: int = 7,
+        road_feature_dim: int = 2,
+        history_len: int = 10,
+        road_points: int = 60,
+        dropout: float = 0.1,
+        **_: Any,
+    ):
         super().__init__()
-        C1DUnet_config = config["model"]["C1DUnet"]
-        prediction_state_dim = C1DUnet_config["prediction_state_dim"]
-        future_len = int(config["data"]["future_len"])
-        self.input_dims = (future_len, prediction_state_dim)
-        time_embed_dim = C1DUnet_config['time_embed_dim']
-        scene_embed_dim = C1DUnet_config['scene_embed_dim']
-        down_dims = C1DUnet_config['down_dims']
-        
+        down_dims = [int(d) for d in down_dims]
+        if len(down_dims) < 2:
+            raise ValueError("`down_dims` must contain at least two channel sizes.")
+
         # The total dimension of the conditioning vector
         cond_embed_dim = time_embed_dim + scene_embed_dim
         
@@ -45,7 +55,14 @@ class ConditionalUNet1D(nn.Module):
             nn.Linear(time_embed_dim, time_embed_dim), nn.Mish(),
             nn.Linear(time_embed_dim, time_embed_dim)
         )
-        self.state_encoder = StateClsEncoder(cfg=config)
+        self.state_encoder = StateClsEncoder(
+            history_state_dim=history_state_dim,
+            road_feature_dim=road_feature_dim,
+            hidden_dim=scene_embed_dim,
+            dropout=dropout,
+            history_len=history_len,
+            road_points=road_points,
+        )
         
         self.initial_conv = nn.Conv1d(prediction_state_dim, down_dims[0], kernel_size=1)
         

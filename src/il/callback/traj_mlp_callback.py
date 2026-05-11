@@ -53,20 +53,13 @@ class TrajVisualizationCallback(Callback):
         if len(self._collected_samples) >= self._num_samples:
             return
 
-        # 获取模型预测结果
-        model = trainer.model
-        model.eval()
-        with torch.no_grad():
-            pred = model._predict(batch)  # (B, F, 2) or (B, F, 4)
-
-        batch_size = pred.shape[0]
+        batch_size = outputs["pred_future"].shape[0]
         remaining = self._num_samples - len(self._collected_samples)
         num_to_collect = min(batch_size, remaining)
 
         for i in range(num_to_collect):
-            # 拆出单条样本，detach 到 CPU
             sample_data = {k: v[i].detach().cpu() for k, v in batch.items()}
-            sample_data["pred_future"] = pred[i].detach().cpu()
+            sample_data["pred_future"] = outputs["pred_future"][i].detach().cpu()
             self._collected_samples.append(sample_data)
 
     def on_validation_epoch_end(self, trainer: Any) -> None:

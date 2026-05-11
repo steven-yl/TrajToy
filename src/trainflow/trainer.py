@@ -431,7 +431,7 @@ class Trainer:
             for key, value in output.items():
                 if key == "loss":
                     metrics[key] = float(loss.detach().item())
-                elif isinstance(value, torch.Tensor):
+                elif isinstance(value, torch.Tensor) and value.ndim == 0:
                     metrics[key] = float(value.detach().item())
                 elif isinstance(value, (float, int)):
                     metrics[key] = float(value)

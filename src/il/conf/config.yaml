@@ -11,8 +11,14 @@ hydra:
     subdir: ${hydra.job.num}
 
 defaults:
-  - training@: close_eval_traj_mlp  # train_traj_mlp, close_eval_traj_mlp
+  # train_traj_mlp, train_traj_diffusion, close_eval_traj_mlp
+  - training@: train_traj_diffusion
   - _self_
 
-run_mode: close_eval # train, validate, test, close_eval
-resume_checkpoint: log/il_train_traj_mlp_train_20260511_113803/checkpoint/final.ckpt
+# train, validate, test, close_eval
+run_mode: train
+
+# train_traj_mlp
+# resume_checkpoint: log/il_train_traj_mlp_train_20260511_113803/checkpoint/final.ckpt
+# train_traj_mlp
+# resume_checkpoint: log/il_train_traj_mlp_train_20260511_115111/checkpoint/final.ckpt

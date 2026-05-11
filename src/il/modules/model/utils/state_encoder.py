@@ -35,25 +35,25 @@ class StateEncoder(nn.Module):
 
     def __init__(
         self,
-        cfg_history_state_dim: int,
-        cfg_road_feature_dim: int,
-        cfg_hidden_dim: int,
-        cfg_dropout: float,
+        history_state_dim: int,
+        road_feature_dim: int,
+        hidden_dim: int,
+        dropout: float,
         history_len: int,
         road_points: int,
     ) -> None:
         super().__init__()
-        hidden = int(cfg_hidden_dim)
+        hidden = int(hidden_dim)
 
-        self.history_proj = nn.Linear(int(cfg_history_state_dim), hidden)
-        self.centerline_proj = nn.Linear(int(cfg_road_feature_dim), hidden)
-        self.left_boundary_proj = nn.Linear(int(cfg_road_feature_dim), hidden)
-        self.right_boundary_proj = nn.Linear(int(cfg_road_feature_dim), hidden)
-        self.lane_dividers_proj = nn.Linear(int(cfg_road_feature_dim), hidden)
+        self.history_proj = nn.Linear(int(history_state_dim), hidden)
+        self.centerline_proj = nn.Linear(int(road_feature_dim), hidden)
+        self.left_boundary_proj = nn.Linear(int(road_feature_dim), hidden)
+        self.right_boundary_proj = nn.Linear(int(road_feature_dim), hidden)
+        self.lane_dividers_proj = nn.Linear(int(road_feature_dim), hidden)
         self.speed_proj = nn.Linear(2, hidden)
 
-        self.history_pe = PositionalEncoding(hidden, max_len=int(history_len) + 1, dropout=float(cfg_dropout))
-        self.road_pe = PositionalEncoding(hidden, max_len=int(road_points), dropout=float(cfg_dropout))
+        self.history_pe = PositionalEncoding(hidden, max_len=int(history_len) + 1, dropout=float(dropout))
+        self.road_pe = PositionalEncoding(hidden, max_len=int(road_points), dropout=float(dropout))
 
         # 类型嵌入 (0=centerline, 1=left, 2=right, 3=divider, 4=speed_token)
         self.road_type_emb = nn.Embedding(5, hidden)
@@ -127,25 +127,25 @@ class StateClsEncoder(nn.Module):
 
     def __init__(
         self,
-        cfg_history_state_dim: int,
-        cfg_road_feature_dim: int,
-        cfg_hidden_dim: int,
-        cfg_dropout: float,
+        history_state_dim: int,
+        road_feature_dim: int,
+        hidden_dim: int,
+        dropout: float,
         history_len: int,
         road_points: int,
     ) -> None:
         super().__init__()
-        hidden = int(cfg_hidden_dim)
+        hidden = int(hidden_dim)
 
-        self.history_proj = nn.Linear(int(cfg_history_state_dim), hidden)
-        self.centerline_proj = nn.Linear(int(cfg_road_feature_dim), hidden)
-        self.left_boundary_proj = nn.Linear(int(cfg_road_feature_dim), hidden)
-        self.right_boundary_proj = nn.Linear(int(cfg_road_feature_dim), hidden)
-        self.lane_dividers_proj = nn.Linear(int(cfg_road_feature_dim), hidden)
+        self.history_proj = nn.Linear(int(history_state_dim), hidden)
+        self.centerline_proj = nn.Linear(int(road_feature_dim), hidden)
+        self.left_boundary_proj = nn.Linear(int(road_feature_dim), hidden)
+        self.right_boundary_proj = nn.Linear(int(road_feature_dim), hidden)
+        self.lane_dividers_proj = nn.Linear(int(road_feature_dim), hidden)
         self.speed_proj = nn.Linear(2, hidden)
 
-        self.history_pe = PositionalEncoding(hidden, max_len=int(history_len) + 1, dropout=float(cfg_dropout))
-        self.road_pe = PositionalEncoding(hidden, max_len=int(road_points), dropout=float(cfg_dropout))
+        self.history_pe = PositionalEncoding(hidden, max_len=int(history_len) + 1, dropout=float(dropout))
+        self.road_pe = PositionalEncoding(hidden, max_len=int(road_points), dropout=float(dropout))
 
         # 类型嵌入 (0=centerline, 1=left, 2=right, 3=divider, 4=speed_token)
         self.road_type_emb = nn.Embedding(5, hidden)
