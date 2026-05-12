@@ -8,7 +8,7 @@ import torch
 
 from trainflow.callbacks import Callback
 from trainflow.loggers import TensorBoardLogger, LoggerCollection
-from il.data.visualization import TrajectoryDatasetVisualizer
+from il.data.visualization import TrajectoryDatasetVisualizer, DiffusionProcessVisualizer
 
 
 class TrajVisualizationCallback(Callback):
@@ -60,6 +60,8 @@ class TrajVisualizationCallback(Callback):
         for i in range(num_to_collect):
             sample_data = {k: v[i].detach().cpu() for k, v in batch.items()}
             sample_data["pred_future"] = outputs["pred_future"][i].detach().cpu()
+            if "x_samples" in outputs:
+                sample_data["x_samples"] = [x[i].detach().cpu() for x in outputs["x_samples"]]
             self._collected_samples.append(sample_data)
 
     def on_validation_epoch_end(self, trainer: Any) -> None:
@@ -74,7 +76,7 @@ class TrajVisualizationCallback(Callback):
 
         titles = [f"Sample {i}" for i in range(len(self._collected_samples))]
 
-        # 直接使用 TrajectoryDatasetVisualizer，支持 list[dict] 网格绘制
+        # 轨迹预测可视化（GT + Prediction）
         TrajectoryDatasetVisualizer.log_to_tensorboard(
             writer,
             self._collected_samples,
@@ -83,6 +85,25 @@ class TrajVisualizationCallback(Callback):
             title=titles,
             ncols=self._ncols,
         )
+
+        # 扩散去噪过程可视化（如果存在 x_samples）
+        for idx, sample in enumerate(self._collected_samples):
+            if "x_samples" not in sample or not sample["x_samples"]:
+                continue
+            step_dicts = DiffusionProcessVisualizer.build_step_dicts(sample)
+            num_steps = len(step_dicts)
+            step_titles = [
+                f"t={num_steps - 1 - i}" if i < num_steps - 1 else "t=0 (final)"
+                for i in range(num_steps)
+            ]
+            DiffusionProcessVisualizer.log_to_tensorboard(
+                writer,
+                step_dicts,
+                tag=f"{self._tag}/diffusion_sample_{idx}",
+                global_step=trainer.global_step,
+                title=step_titles,
+                ncols=min(4, num_steps),
+            )
 
     @staticmethod
     def _get_tb_writer(trainer: Any):

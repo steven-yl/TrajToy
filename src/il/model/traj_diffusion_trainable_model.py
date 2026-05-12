@@ -9,7 +9,7 @@ import torch
 from trainflow.model import TrainableModel
 from il.modules.loss.loss import Loss
 from il.modules.metrics.metrics import Metrics
-
+from il.modules.utis.normalizer import Normalizer
 from il.modules.utis.lr_scheduler import build_lr_scheduler
 
 class TrajDiffusionModelWrapper(torch.nn.Module):
@@ -19,7 +19,6 @@ class TrajDiffusionModelWrapper(torch.nn.Module):
         self,
         model: torch.nn.Module,
         loss_fn: Loss,
-        metrics_fn: Metrics,
         diffusion_schedule: str = "linear",
         diffusion_steps: int = 1000,
         beta_start: float = 1e-4,
@@ -28,7 +27,6 @@ class TrajDiffusionModelWrapper(torch.nn.Module):
         super().__init__()
         self.model = model
         self.loss_fn = loss_fn
-        self.metrics_fn = metrics_fn
         self.diffusion_schedule = str(diffusion_schedule)
         self.diffusion_steps = int(diffusion_steps)
         self.beta_start = float(beta_start)
@@ -173,44 +171,70 @@ class TrajDiffusionModelWrapper(torch.nn.Module):
         var = self.posterior_variance[t].clamp(min=1e-20)
         return mean + var.sqrt() * torch.randn_like(x)
 
-    def sample_trajectory(self, batch: dict[str, torch.Tensor]) -> torch.Tensor:
+    def sample_trajectory(self, batch: dict[str, torch.Tensor], sample_num: int = 0) -> torch.Tensor:
         """从纯噪声开始完整反向采样得到 future 轨迹 (B, L, C)。"""
         cond = self._prepare_condition(batch)
         ref = batch["future"]
         x = torch.randn(ref.shape, device=ref.device, dtype=ref.dtype)
+        sample_steps = self.diffusion_steps // sample_num if sample_num > 0 else None
+        x_samples = []
         for t in range(self.diffusion_steps - 1, -1, -1):
             x = self._p_sample_step(x, t, cond)
-        return x
+            if sample_steps is not None and t % sample_steps == 0:
+                x_samples.append(x.clone())
+        return x, x_samples
 
-    def forward(self, batch: dict[str, torch.Tensor]) -> torch.Tensor:
+    def forward(self, batch: dict[str, torch.Tensor], sample_num: int = 3) -> tuple[torch.Tensor, list[torch.Tensor]]:
         """推理：等价于 ``sample_trajectory``。"""
-        return self.sample_trajectory(batch)
+        return self.sample_trajectory(batch, sample_num=sample_num)
 
-    def _compute_noise_loss(
-        self,
-        pred_eps: torch.Tensor,
-        eps: torch.Tensor,
-        future_mask: torch.Tensor,
-    ) -> dict[str, torch.Tensor]:
-        return self._as_loss_dict(self.loss_fn(pred_eps, eps, future_mask))
-
-    def compute_step_output(
+    def compute_noise_loss(
         self,
         batch: dict[str, torch.Tensor],
-        with_metrics: bool,
-    ) -> dict[str, torch.Tensor]:
+    ) -> tuple[dict[str, torch.Tensor], torch.Tensor, torch.Tensor, torch.Tensor]:
         pred_eps, eps, timesteps, x_noisy = self._diffusion_forward(batch)
-        out = self._compute_noise_loss(pred_eps, eps, batch["future_mask"])
-        if with_metrics:
-            pred_x0 = self._estimate_x0(x_noisy, pred_eps, timesteps)
-            out.update(self.metrics_fn(pred_x0, batch["future"], batch["future_mask"]))
-            out.update({"pred_future": pred_x0})
-        return out
+        loss = self._as_loss_dict(self.loss_fn(pred_eps, eps, batch["future_mask"]))
+        return loss, x_noisy, pred_eps, timesteps
 
+    def compute_x0(
+        self,
+        x_noisy: torch.Tensor,
+        pred_eps: torch.Tensor,
+        timesteps: torch.Tensor,
+    ) -> torch.Tensor:
+        return self._estimate_x0(x_noisy, pred_eps, timesteps)
+    # 顺序采样过程
+    
+    def order_diffusion_forward(
+        self,
+        batch: dict[str, torch.Tensor],
+        sample_num: int = 1,
+    ) -> list[torch.Tensor]:
+        x0 = batch["future"]
+        step = self.diffusion_steps // sample_num if sample_num > 0 else 1
+        timesteps = torch.arange(0, self.diffusion_steps, step=step, device=x0.device)
+        timesteps = timesteps.unsqueeze(0).repeat(x0.shape[0], 1)  # (B, T)
+
+        # 对于每个 timestep（列），针对所有样本（行）采样
+        x_noisy_list = []
+        eps_list = []
+        for i in range(timesteps.shape[1]):
+            t = timesteps[:, i]
+            x_noisy, eps = self._q_sample(x0, t)
+            x_noisy_list.append(x_noisy)
+            eps_list.append(eps)
+        # 堆叠输出: [(B, ...)] -> (T, B, ...)
+        x_noisy = torch.stack(x_noisy_list, dim=1)  # (T, B, ...)
+        eps = torch.stack(eps_list, dim=1)          # (T, B, ...)
+        # x_noisy = x_noisy.transpose(0, 1)           # (B, T, ...)
+        # eps = eps.transpose(0, 1)                   # (B, T, ...)
+        return x_noisy, eps, timesteps
 
 class TrajDiffusionTrainableModel(TrainableModel):
     def __init__(self,
             predictor: TrajDiffusionModelWrapper,
+            metrics_fn: Metrics,
+            normalizer: Normalizer,
             lr: float = 1.0e-3,
             weight_decay: float = 1.0e-4,
             lr_scheduler: str = "cosine_warmup",
@@ -223,6 +247,8 @@ class TrajDiffusionTrainableModel(TrainableModel):
         ) -> None:
         super().__init__()
         self.predictor = predictor
+        self.metrics_fn = metrics_fn
+        self.normalizer = normalizer
         self.lr = lr
         self.weight_decay = weight_decay
         self.lr_scheduler = lr_scheduler
@@ -255,14 +281,55 @@ class TrajDiffusionTrainableModel(TrainableModel):
         return out
 
     def forward(self, batch: dict[str, torch.Tensor]) -> dict[str, torch.Tensor]:
-        return self.predictor.compute_step_output(batch, with_metrics=True)
+        loss, x_noisy, pred_eps, timesteps = self.predictor.compute_noise_loss(self.normalizer.apply(batch))
+        pred_future = self.predictor.compute_x0(x_noisy, pred_eps, timesteps)
+        pred_future = self.normalizer.inverse_future(pred_future)
+        metrics = self.metrics_fn(pred_future, batch["future"], batch["future_mask"])
+        out = loss
+        out.update({"pred_future": pred_future})
+        out.update(metrics)
+        return out
 
     def validation_step(self, batch: dict[str, torch.Tensor]) -> dict[str, torch.Tensor]:
-        return self.predictor.compute_step_output(batch, with_metrics=True)
+        # loss, x_noisy, pred_eps, timesteps = self.predictor.compute_noise_loss(self.normalizer.apply(batch))
+        # pred_future = self.predictor.compute_x0(x_noisy, pred_eps, timesteps)
+        # pred_future = self.normalizer.inverse_future(pred_future)
+        # metrics = self.metrics_fn(pred_future, batch["future"], batch["future_mask"])
+        # loss.update({"pred_future": pred_future})
+        # loss.update(metrics)
+        # return loss
+
+        pred_future, x_samples = self.predictor(self.normalizer.apply(batch), sample_num=3)
+        pred_future = self.normalizer.inverse_future(pred_future)
+        x_samples = [self.normalizer.inverse_future(x) for x in x_samples]
+
+        metrics = self.metrics_fn(pred_future, batch["future"], batch["future_mask"])
+        out = {"loss": torch.tensor(0.0, device=pred_future.device)}
+        out.update(metrics)
+        out.update({"pred_future": pred_future, "x_samples": x_samples})
+        return out
 
     def test_step(self, batch: dict[str, torch.Tensor]) -> dict[str, torch.Tensor]:
-        return self.predictor.compute_step_output(batch, with_metrics=True)
+        # loss, x_noisy, pred_eps, timesteps = self.predictor.compute_noise_loss(self.normalizer.apply(batch))
+        # pred_future = self.predictor.compute_x0(x_noisy, pred_eps, timesteps)
+        # pred_future = self.normalizer.inverse_future(pred_future)
+        # metrics = self.metrics_fn(pred_future, batch["future"], batch["future_mask"])
+        # loss.update({"pred_future": pred_future})
+        # loss.update(metrics)
+        # return loss
+
+        pred_future, x_samples = self.predictor(self.normalizer.apply(batch), sample_num=3)
+        pred_future = self.normalizer.inverse_future(pred_future)
+        x_samples = [self.normalizer.inverse_future(x) for x in x_samples]
+
+        metrics = self.metrics_fn(pred_future, batch["future"], batch["future_mask"])
+        out = {"loss": torch.tensor(0.0, device=pred_future.device)}
+        out.update(metrics)
+        out.update({"pred_future": pred_future, "x_samples": x_samples})
+        return out
 
     def predict_step(self, batch: dict[str, torch.Tensor]) -> dict[str, torch.Tensor]:
-        pred_future = self.predictor(batch)
-        return {"pred_future": pred_future, "batch": batch}
+        pred_future, x_samples = self.predictor(self.normalizer.apply(batch), sample_num=3)
+        pred_future = self.normalizer.inverse_future(pred_future)
+        x_samples = [self.normalizer.inverse_future(x) for x in x_samples]
+        return {"pred_future": pred_future, "x_samples": x_samples, "batch": batch}

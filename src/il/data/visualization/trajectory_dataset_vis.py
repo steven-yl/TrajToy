@@ -1,20 +1,3 @@
-"""TrajectoryDataset 样本可视化。
-
-使用方式:
-    from il.data.visualization import TrajectoryDatasetVisualizer
-
-    dataset = TrajectoryDataset(...)
-    sample = dataset[0]
-    TrajectoryDatasetVisualizer.plot(sample, show=True)
-    TrajectoryDatasetVisualizer.plot(sample, save_path="sample_0.png")
-
-    # 带模型预测结果
-    sample["pred_future"] = model_pred  # (F, 2) or (F, 4)
-    TrajectoryDatasetVisualizer.plot(sample, show=True)
-"""
-
-from __future__ import annotations
-
 from typing import Any
 
 import numpy as np

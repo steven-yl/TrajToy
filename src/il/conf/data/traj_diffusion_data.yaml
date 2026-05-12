@@ -16,38 +16,3 @@ data_set:
   road_points: ${trainflow.model.predictor.model.road_points}
   num_lane_dividers: 2
   use_local_coords: true
-
-  # 归一化（扁平键名与 batch 字段一致，由 Normalizer 读取）
-  normalizer:
-    _target_: il.modules.utis.normalizer.Normalizer
-    # history 每步 7 维: x,y(m,车体系), theta(rad), v(m/s), steer(rad), accel(m/s²), omega(rad/s)
-    # mean 保持 0：局部坐标下大致零中心；std 取常见量级，避免全程 raw 量级差异过大
-    parameters:
-      history:
-        mean: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
-        std: [35.0, 35.0, 0.8, 1.0, 0.4, 3.0, 0.8]
-      # future 前 4 维与 history 一致；预测更远，xy 略放大 std
-      future:
-        mean: [0.0, 0.0, 0.0, 0.0]
-        std: [35.0, 35.0, 0.8, 1.0]
-      # vehicle_params:
-      #   mean: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
-      #   std: [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
-      # 道路点均为车体系 xy(m)；前方延伸通常大于横向摆动
-      centerline:
-        mean: [0.0, 0.0]
-        std: [35.0, 35.0]
-      left_boundary:
-        mean: [0.0, 0.0]
-        std: [35.0, 35.0]
-      right_boundary:
-        mean: [0.0, 0.0]
-        std: [35.0, 35.0]
-      # (..., D, N, 2) → 最后一维 2
-      lane_dividers:
-        mean: [0.0, 0.0]
-        std: [35.0, 35.0]
-      # 沿路限速 m/s；mean≈60km/h 量级，std 覆盖城快/高速差异（宜日后用统计值替换）
-      max_v:
-        mean: [0.0]
-        std: [1.0]

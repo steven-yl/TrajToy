@@ -15,7 +15,7 @@ callbacks:
     monitor: val/loss
     mode: epoch
     save_top_k: 1
-    every_n_epochs: 10
+    every_n_epochs: 5
   - _target_: trainflow.callbacks.TrainProgressBar
     leave: true
   - _target_: trainflow.callbacks.ValidationProgressBar
@@ -28,10 +28,10 @@ callbacks:
     log_metrics: true
     verbose: false
   - _target_: il.callback.traj_mlp_callback.TrajVisualizationCallback
-    log_every_n_epochs: 1
+    log_every_n_epochs: 5
     num_samples: 2
     tag: val_vis/trajectory
-    ncols: 1
+    ncols: 2
 logger:
   - _target_: trainflow.loggers.CSVLogger
     save_dir: ${hydra:runtime.output_dir}/metrics

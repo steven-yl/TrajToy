@@ -40,40 +40,40 @@ def _affine(x: torch.Tensor, mean: torch.Tensor, std: torch.Tensor, *, inverse: 
     return y.masked_fill(_expand_mask(mask, y), 0)
 
 
-class BatchNormalizer:
-    """读取 ``data/normalization`` 下每个 batch 字段的 ``mean`` / ``std``，做 ``(x-mean)/std`` 及反变换。"""
+# class BatchNormalizer:
+#     """读取 ``data/normalization`` 下每个 batch 字段的 ``mean`` / ``std``，做 ``(x-mean)/std`` 及反变换。"""
 
-    def __init__(self, parameters: dict[str, dict[str, Any]]) -> None:
-        self._parameters = {
-            k: {"mean": torch.as_tensor((par["mean"]), dtype=torch.float32), "std": torch.as_tensor((par["std"]), dtype=torch.float32)}
-            for k, par in parameters.items()
-        }
+#     def __init__(self, parameters: dict[str, dict[str, Any]]) -> None:
+#         self._parameters = {
+#             k: {"mean": torch.as_tensor((par["mean"]), dtype=torch.float32), "std": torch.as_tensor((par["std"]), dtype=torch.float32)}
+#             for k, par in parameters.items()
+#         }
 
-    def normalize(self, batch: dict) -> dict:
-        out = copy(batch)
-        for key, par in self._parameters.items():
-            if key in out:
-                out[key] = _affine(out[key], par["mean"], par["std"], inverse=False)
-        return out
+#     def normalize(self, batch: dict) -> dict:
+#         out = copy(batch)
+#         for key, par in self._parameters.items():
+#             if key in out:
+#                 out[key] = _affine(out[key], par["mean"], par["std"], inverse=False)
+#         return out
 
-    def inverse(self, batch: dict) -> dict:
-        out = copy(batch)
-        for key, par in self._parameters.items():
-            if key in out:
-                out[key] = _affine(out[key], par["mean"], par["std"], inverse=True)
-        return out
+#     def inverse(self, batch: dict) -> dict:
+#         out = copy(batch)
+#         for key, par in self._parameters.items():
+#             if key in out:
+#                 out[key] = _affine(out[key], par["mean"], par["std"], inverse=True)
+#         return out
 
-    def inverse_tensor(self, key: str, x: torch.Tensor) -> torch.Tensor:
-        if key not in self._parameters:
-            return x
-        par = self._parameters[key]
-        return _affine(x, par["mean"], par["std"], inverse=True)
+#     def inverse_tensor(self, key: str, x: torch.Tensor) -> torch.Tensor:
+#         if key not in self._parameters:
+#             return x
+#         par = self._parameters[key]
+#         return _affine(x, par["mean"], par["std"], inverse=True)
 
-    def inverse_future(self, x: torch.Tensor) -> torch.Tensor:
-        return self.inverse_tensor("future", x)
+#     def inverse_future(self, x: torch.Tensor) -> torch.Tensor:
+#         return self.inverse_tensor("future", x)
 
-    def to_dict(self) -> dict[str, dict[str, list[float]]]:
-        return {k: {kk: vv.detach().cpu().tolist() for kk, vv in v.items()} for k, v in self._parameters.items()}
+#     def to_dict(self) -> dict[str, dict[str, list[float]]]:
+#         return {k: {kk: vv.detach().cpu().tolist() for kk, vv in v.items()} for k, v in self._parameters.items()}
 
 def _as_torch(x: torch.Tensor | np.ndarray) -> tuple[torch.Tensor, bool]:
     if isinstance(x, torch.Tensor):

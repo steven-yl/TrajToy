@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
+import torch.nn as nn
 from omegaconf import DictConfig, OmegaConf
 
 try:
@@ -104,12 +105,34 @@ def instantiate_trainflow(cfg: DictConfig) -> tuple[Any, Any, Any]:
     return trainer, model, datamodule
 
 
+def _print_module_parameter_summary(module: nn.Module, *, name: str = "model") -> None:
+    """打印总参数量、可训练参数量及按 dtype 估算的权重体积（与优化器状态无关）。"""
+    params = list(module.parameters())
+    n_total = sum(p.numel() for p in params)
+    n_trainable = sum(p.numel() for p in params if p.requires_grad)
+    n_bytes = sum(p.numel() * p.element_size() for p in params)
+    mib = n_bytes / (1024**2)
+    print(
+        f"[{name}] params: total={n_total:,} trainable={n_trainable:,} "
+        f"weight_bytes≈{n_bytes:,} (~{mib:.2f} MiB)"
+    )
+    for child_name, child in module.named_children():
+        c = sum(p.numel() for p in child.parameters())
+        if c == 0:
+            continue
+        ct = sum(p.numel() for p in child.parameters() if p.requires_grad)
+        b = sum(p.numel() * p.element_size() for p in child.parameters())
+        print(f"  └─ {child_name}: {c:,} params ({ct:,} trainable), ~{b / (1024**2):.2f} MiB")
+
+
 def run_fit(cfg: DictConfig) -> None:
     """Instantiate trainflow and run ``fit``. Resume when ``resume_checkpoint`` is set or
     ``auto_load_checkpoint`` is true with ``checkpoint_path``.
     """
     print("start train...")
     trainer, model, datamodule = instantiate_trainflow(cfg)
+    if isinstance(model, nn.Module):
+        _print_module_parameter_summary(model)
     ckpt = fit_resume_checkpoint_path(cfg)
     if ckpt is None:
         trainer.fit(model, datamodule)
@@ -128,6 +151,8 @@ def run_validate(cfg: DictConfig) -> None:
     print("start validate...")
     trainer, model, datamodule = instantiate_trainflow(cfg)
     trainer.model = model
+    if isinstance(model, nn.Module):
+        _print_module_parameter_summary(model)
     trainer.datamodule = datamodule
     ckpt = fit_resume_checkpoint_path(cfg)
     if ckpt is None:
@@ -143,6 +168,8 @@ def run_test(cfg: DictConfig) -> None:
     print("start test...")
     trainer, model, datamodule = instantiate_trainflow(cfg)
     trainer.model = model
+    if isinstance(model, nn.Module):
+        _print_module_parameter_summary(model)
     trainer.datamodule = datamodule
     ckpt = fit_resume_checkpoint_path(cfg)
     if ckpt is None:
@@ -157,6 +184,8 @@ def run_predict(cfg: DictConfig) -> list[Any]:
     print("start predict...")
     trainer, model, datamodule = instantiate_trainflow(cfg)
     trainer.model = model
+    if isinstance(model, nn.Module):
+        _print_module_parameter_summary(model)
     trainer.datamodule = datamodule
     ckpt = fit_resume_checkpoint_path(cfg)
     if ckpt is None:
