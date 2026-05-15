@@ -1,0 +1,34 @@
+# configs/hydra/job_logging/custom.yaml
+version: 1
+formatters:
+  detailed:
+    # %(filename)s 为源文件基名；%(lineno)d 为调用 logging 的那一行；需完整路径可用 %(pathname)s
+    # format: '%(asctime)s - %(name)s - %(levelname)s - %(filename)s:%(lineno)d - %(message)s'
+    format: '%(asctime)s - %(levelname)s - %(filename)s:%(lineno)d - %(message)s'
+handlers:
+  console:
+    class: logging.StreamHandler
+    stream: ext://sys.stdout
+    formatter: detailed
+    level: INFO
+  file:
+    class: logging.FileHandler
+    filename: ${hydra.runtime.output_dir}/train.log
+    formatter: detailed
+    level: INFO
+  tqdm_file:
+    class: logging.FileHandler
+    # 关键点：使用 hydra 的运行目录变量来指定输出路径
+    filename: ${hydra.runtime.output_dir}/tqdm_progress.log
+    formatter: detailed
+    level: INFO
+root:
+  level: INFO
+  handlers: [console, file]
+loggers:
+  # 为 tqdm_progress 这个 logger 专门指定处理器
+  tqdm_progress:
+    level: INFO
+    handlers: [tqdm_file]  # 只使用文件处理器
+    propagate: false       # 禁止日志向上传递给 root logger
+disable_existing_loggers: false

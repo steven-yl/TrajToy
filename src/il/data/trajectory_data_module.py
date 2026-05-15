@@ -22,6 +22,7 @@ class TrajectoryDataModule(DataModule):
         val_ratio: float,
         batch_size: int,
         num_workers: int,
+        pin_memory: bool,
         data_set: Dataset,
     ) -> None:
         super().__init__()
@@ -30,6 +31,7 @@ class TrajectoryDataModule(DataModule):
         self._val_ratio = float(val_ratio)
         self._batch_size = int(batch_size)
         self._num_workers = int(num_workers)
+        self._pin_memory = bool(pin_memory)
         self._full_ds: Dataset | None = None
         self._train_ds: Subset | None = None
         self._val_ds: Subset | None = None
@@ -57,7 +59,7 @@ class TrajectoryDataModule(DataModule):
         print(f" full_ds: {len(self._full_ds)}, train_ds: {len(self._train_ds)}, val_ds: {len(self._val_ds)}, test_ds: {len(self._test_ds)}")
 
     def _loader_kw(self) -> dict:
-        return {"num_workers": self._num_workers, "pin_memory": True}
+        return {"num_workers": self._num_workers, "pin_memory": self._pin_memory}
 
     def train_dataloader(self) -> DataLoader:
         self.setup(stage="fit")

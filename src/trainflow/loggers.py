@@ -7,6 +7,32 @@ from typing import Mapping
 
 from torch.utils.tensorboard import SummaryWriter
 
+import logging
+import sys
+
+class TqdmLogger:
+    """将 tqdm 进度条的输出重定向到指定的日志记录器。"""
+    def __init__(self, logger: logging.Logger, stderr: bool = True):
+        self.logger = logger
+        self.stderr = stderr
+
+    def write(self, msg: str) -> None:
+        # 关键步骤：移除每行开头可能导致重复的 '\r' 回车符
+        if msg and msg.strip():
+            self.logger.info(msg.lstrip('\r'))
+        if msg and self.stderr:
+            try:
+                sys.stderr.write(msg)
+            except Exception as e:
+                print(f"Error writing to stderr: {e}")
+                pass
+
+    def flush(self) -> None:
+        if self.stderr:
+            try:
+                sys.stderr.flush()
+            except Exception as e:
+                print(f"Error flushing stderr: {e}")
 
 class Logger(ABC):
     @abstractmethod

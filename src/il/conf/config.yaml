@@ -13,6 +13,7 @@ hydra:
 defaults:
   # train_traj_mlp, train_traj_diffusion, close_eval_traj_mlp
   - training@: train_traj_diffusion
+  - override hydra/job_logging: custom   # 覆盖 Hydra 内置的 job_logging，避免 Multiple values
   - _self_
 
 # train, validate, test, close_eval

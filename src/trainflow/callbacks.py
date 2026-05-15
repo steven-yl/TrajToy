@@ -1,11 +1,19 @@
 from __future__ import annotations
 
+import logging
+import sys
 import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 import torch
+
+from trainflow.loggers import TqdmLogger
+
+
+tqdm_logger = logging.getLogger('tqdm_progress')
+_TQDM_OUT = TqdmLogger(tqdm_logger)
 
 
 class Callback:
@@ -169,7 +177,12 @@ class TrainProgressBar(Callback):
             return
         dl = trainer.datamodule.train_dataloader()
         total = len(dl) if hasattr(dl, "__len__") else None
-        self._pbar = tqdm(total=total, desc=f"train epoch {trainer.current_epoch}", leave=self.leave)
+        self._pbar = tqdm(
+            total=total,
+            desc=f"train epoch {trainer.current_epoch}",
+            leave=self.leave,
+            file=_TQDM_OUT,
+        )
 
     def on_train_batch_end(self, trainer: Any, outputs: Any, batch: Any, batch_idx: int) -> None:
         if self._pbar is not None:
@@ -197,7 +210,12 @@ class ValidationProgressBar(Callback):
             return
         dl = trainer.datamodule.val_dataloader()
         total = len(dl) if hasattr(dl, "__len__") else None
-        self._pbar = tqdm(total=total, desc=f"val epoch {trainer.current_epoch}", leave=self.leave)
+        self._pbar = tqdm(
+            total=total,
+            desc=f"val epoch {trainer.current_epoch}",
+            leave=self.leave,
+            file=_TQDM_OUT,
+        )
 
     def on_validation_batch_end(self, trainer: Any, outputs: Any, batch: Any, batch_idx: int) -> None:
         if self._pbar is None:
@@ -226,7 +244,12 @@ class TestProgressBar(Callback):
             return
         dl = trainer.datamodule.test_dataloader()
         total = len(dl) if hasattr(dl, "__len__") else None
-        self._pbar = tqdm(total=total, desc=f"test epoch {trainer.current_epoch}", leave=self.leave)
+        self._pbar = tqdm(
+            total=total,
+            desc=f"test epoch {trainer.current_epoch}",
+            leave=self.leave,
+            file=_TQDM_OUT,
+        )
 
 
     def on_test_batch_end(self, trainer: Any, outputs: Any, batch: Any, batch_idx: int) -> None:
@@ -257,7 +280,12 @@ class PredictProgressBar(Callback):
             return
         dl = trainer.datamodule.predict_dataloader()
         total = len(dl) if hasattr(dl, "__len__") else None
-        self._pbar = tqdm(total=total, desc=f"predict epoch {trainer.current_epoch}", leave=self.leave)
+        self._pbar = tqdm(
+            total=total,
+            desc=f"predict epoch {trainer.current_epoch}",
+            leave=self.leave,
+            file=_TQDM_OUT,
+        )
 
 
     def on_predict_batch_end(self, trainer: Any, outputs: Any, batch: Any, batch_idx: int) -> None:

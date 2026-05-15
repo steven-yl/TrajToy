@@ -8,6 +8,7 @@ from pathlib import Path
 
 import hydra
 from omegaconf import DictConfig, OmegaConf
+import logging
 
 _SRC_DIR = Path(__file__).resolve().parents[1]
 if str(_SRC_DIR) not in sys.path:
@@ -31,7 +32,7 @@ def _run_mode(cfg: DictConfig) -> str:
 
 @hydra.main(version_base=None, config_path="conf", config_name="config")
 def main(cfg: DictConfig) -> None:
-    print(OmegaConf.to_yaml(cfg))
+    logging.info(OmegaConf.to_yaml(cfg))
     mode = _run_mode(cfg)
     if mode in ["train", "validate", "test", "predict"]:
         # TrainFlow 期望 trainflow 位于传入的 cfg 根节点；Hydra 使用 training@ 打包时常为 cfg.training
@@ -44,10 +45,10 @@ def main(cfg: DictConfig) -> None:
             run_test(tf_cfg)
         elif mode == "predict":
             run_predict(tf_cfg)
-        print("Done!")
+        logging.info("Done!")
     elif mode == "close_eval":
         run_close_eval(cfg)
-        print("Done!")
+        logging.info("Done!")
     else:
         raise ValueError(f"Unknown run mode: {mode}")
 

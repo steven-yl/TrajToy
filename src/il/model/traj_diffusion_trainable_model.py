@@ -11,6 +11,7 @@ from il.modules.loss.loss import Loss
 from il.modules.metrics.metrics import Metrics
 from il.modules.utis.normalizer import Normalizer
 from il.modules.utis.lr_scheduler import build_lr_scheduler
+import logging
 
 class TrajDiffusionModelWrapper(torch.nn.Module):
     """DDPM 包装：训练时随机 t 预测噪声；推理时完整反向马尔可夫链采样。"""
@@ -151,6 +152,7 @@ class TrajDiffusionModelWrapper(torch.nn.Module):
         x: torch.Tensor,
         t: int,
         cond: dict[str, torch.Tensor],
+        eta: float = 0.0,
     ) -> torch.Tensor:
         """DDPM 单步：p(x_{t-1} | x_t)，与训练时的 ε 参数化一致。"""
         b = x.shape[0]
@@ -164,8 +166,20 @@ class TrajDiffusionModelWrapper(torch.nn.Module):
         denom = (1.0 - acp_t).clamp(min=1e-12)
 
         pred_x0 = self._estimate_x0(x, eps, t_vec)
-        mean = (acp_prev.sqrt() * beta_t / denom) * pred_x0 + (alpha_t.sqrt() * (1.0 - acp_prev) / denom) * x
 
+        # DDPM 公式 predict by x0
+        mean = (acp_prev.sqrt() * beta_t / denom) * pred_x0 + (alpha_t.sqrt() * (1.0 - acp_prev) / denom) * x
+        # DDPM 公式 predict by eps
+        # mean1 = 1 / alpha_t.sqrt() * (x - beta_t / denom.sqrt() * eps)
+        
+        # # DDIM 确定性采样 (η=0): x_{t-1} = √ᾱ_{t-1} * x̂₀ + √(1-ᾱ_{t-1}) * ε_θ
+        # ddim_mean = acp_prev.sqrt() * pred_x0 + (1.0 - acp_prev).clamp(min=0.0).sqrt() * eps
+        # # DDIM 随机采样 (η>0):
+        # #   σ_t = η * √((1-ᾱ_{t-1})/(1-ᾱ_t)) * √β_t
+        # #   x_{t-1} = √ᾱ_{t-1} * x̂₀ + √(1-ᾱ_{t-1}-σ²) * ε_θ + σ_t * N(0,I)
+        # sigma_t = eta * ((1.0 - acp_prev) / denom).clamp(min=0.0).sqrt() * beta_t.sqrt()
+        # direction_coeff = (1.0 - acp_prev - sigma_t ** 2).clamp(min=0.0).sqrt()
+        # ddim_mean1 = acp_prev.sqrt() * pred_x0 + direction_coeff * eps + sigma_t * torch.randn_like(x)
         if t == 0:
             return mean
         var = self.posterior_variance[t].clamp(min=1e-20)
@@ -282,12 +296,13 @@ class TrajDiffusionTrainableModel(TrainableModel):
 
     def forward(self, batch: dict[str, torch.Tensor]) -> dict[str, torch.Tensor]:
         loss, x_noisy, pred_eps, timesteps = self.predictor.compute_noise_loss(self.normalizer.apply(batch))
-        pred_future = self.predictor.compute_x0(x_noisy, pred_eps, timesteps)
-        pred_future = self.normalizer.inverse_future(pred_future)
-        metrics = self.metrics_fn(pred_future, batch["future"], batch["future_mask"])
         out = loss
-        out.update({"pred_future": pred_future})
-        out.update(metrics)
+
+        # pred_future = self.predictor.compute_x0(x_noisy, pred_eps, timesteps)
+        # pred_future = self.normalizer.inverse_future(pred_future)
+        # metrics = self.metrics_fn(pred_future, batch["future"], batch["future_mask"])
+        # out.update({"pred_future": pred_future})
+        # out.update(metrics)
         return out
 
     def validation_step(self, batch: dict[str, torch.Tensor]) -> dict[str, torch.Tensor]:
