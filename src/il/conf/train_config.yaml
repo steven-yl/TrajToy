@@ -7,11 +7,11 @@ hydra:
   run:
     dir: ${app.log_root}/${app.name}_${app.selected_training}_${now:%Y%m%d_%H%M%S}
   sweep:
-    dir: ${app.log_root}/${app.name}_${app.selected_training}_${now:%Y%m%d_%H%M%S}
+    dir: ${app.log_root}/${app.name}_multirun_runs_${now:%Y%m%d_%H%M%S}
     subdir: ${hydra.job.num}
 
 defaults:
-  # train_traj_mlp, train_traj_diffusion, close_eval_traj_mlp
+  # train_traj_mlp, train_traj_diffusion
   - training@: train_traj_diffusion
   - override hydra/job_logging: custom   # 覆盖 Hydra 内置的 job_logging，避免 Multiple values
   - _self_
@@ -19,7 +19,4 @@ defaults:
 # train, validate, test, close_eval
 run_mode: train
 
-# train_traj_mlp
-# resume_checkpoint: log/il_train_traj_mlp_train_20260511_113803/checkpoint/final.ckpt
-# train_traj_mlp
-# resume_checkpoint: log/il_train_traj_mlp_train_20260511_115111/checkpoint/final.ckpt
+resume_checkpoint: null

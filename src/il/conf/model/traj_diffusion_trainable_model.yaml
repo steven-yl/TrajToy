@@ -32,6 +32,7 @@ predictor:
   diffusion_steps: 1000
   beta_start: 1.0e-4
   beta_end: 2.0e-2
+  df_type: ddim # ddpm_eps, ddpm_x0, ddim, ddim_rand
 
   # predictor.model：由 defaults 中的 modules/model/conditional_UNet1D_model.yaml 注入；此处可写覆盖项。
   model: 

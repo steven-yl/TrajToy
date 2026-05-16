@@ -1,14 +1,14 @@
 _target_: il.data.trajectory_data_module.TrajectoryDataModule
-train_ratio: 0.1
+train_ratio: 0.8
 val_ratio: 0.1
 num_workers: 0
 pin_memory: true
-batch_size: 32
+batch_size: 64
 data_set:
   _target_: il.data.dataset.trajectory_dataset.TrajectoryDataset
   cfg_data_dirs:
-    - data/20260506_164000/preprocessed  # mac
-    # - data/20260502_021749/preprocessed  # ubuntu
+    # - data/20260506_164000/preprocessed  # mac
+    - data/20260502_021749/preprocessed  # ubuntu
     # - data/20260510_135428/preprocessed  # ubuntu
   history_len: ${trainflow.model.predictor.history_len}
   future_len: ${trainflow.model.predictor.future_len}

@@ -1,0 +1,21 @@
+app:
+  name: il
+  selected_eval: ${hydra:runtime.choices.eval@_global_}_${run_mode}
+  log_root: log
+
+hydra:
+  run:
+    dir: ${app.log_root}/${app.name}_${app.selected_eval}_${now:%Y%m%d_%H%M%S}
+  sweep:
+    dir: ${app.log_root}/${app.name}_multirun_runs_${now:%Y%m%d_%H%M%S}
+    subdir: ${hydra.job.num}
+
+defaults:
+  # close_eval_traj_mlp, close_eval_traj_diffusion (choose one)
+  - eval@: close_eval_traj_diffusion
+  - override hydra/job_logging: custom   # 覆盖 Hydra 内置的 job_logging，避免 Multiple values
+  - _self_
+
+run_mode: close_eval
+# resume_checkpoint: log/il_train_traj_mlp_train_20260516_082344/checkpoint/final.ckpt
+

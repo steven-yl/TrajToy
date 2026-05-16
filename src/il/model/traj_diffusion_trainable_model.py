@@ -24,6 +24,7 @@ class TrajDiffusionModelWrapper(torch.nn.Module):
         diffusion_steps: int = 1000,
         beta_start: float = 1e-4,
         beta_end: float = 2e-2,
+        df_type: str = "ddpm_eps",
     ) -> None:
         super().__init__()
         self.model = model
@@ -32,7 +33,7 @@ class TrajDiffusionModelWrapper(torch.nn.Module):
         self.diffusion_steps = int(diffusion_steps)
         self.beta_start = float(beta_start)
         self.beta_end = float(beta_end)
-
+        self.df_type = df_type
         betas = self._build_betas(
             self.diffusion_schedule,
             self.diffusion_steps,
@@ -152,9 +153,11 @@ class TrajDiffusionModelWrapper(torch.nn.Module):
         x: torch.Tensor,
         t: int,
         cond: dict[str, torch.Tensor],
-        eta: float = 0.0,
+        eta: float = 0.5,
+        df_type: str = "ddpm_eps",  # "ddpm_eps", "ddpm_x0", "ddim", "ddim_rand"
+        t_next: int | None = None,
     ) -> torch.Tensor:
-        """DDPM 单步：p(x_{t-1} | x_t)，与训练时的 ε 参数化一致。"""
+        """单步反向：从调度下标 ``t`` 去噪到更干净的下标 ``t_next``（``t_next < t``，DDPM 连续步传 ``t-1``）。"""
         b = x.shape[0]
         t_vec = torch.full((b,), t, device=x.device, dtype=torch.long)
         eps = self._predict_eps(x, t_vec, cond)
@@ -162,28 +165,48 @@ class TrajDiffusionModelWrapper(torch.nn.Module):
         beta_t = self.betas[t]
         alpha_t = 1.0 - beta_t
         acp_t = self.alphas_cumprod[t]
-        acp_prev = self.alphas_cumprod_prev[t]
+        if t_next is None:
+            t_next = t - 1
+        if t_next < 0:
+            acp_prev = self.alphas_cumprod_prev[0]
+        else:
+            acp_prev = self.alphas_cumprod[t_next]
         denom = (1.0 - acp_t).clamp(min=1e-12)
 
         pred_x0 = self._estimate_x0(x, eps, t_vec)
 
-        # DDPM 公式 predict by x0
-        mean = (acp_prev.sqrt() * beta_t / denom) * pred_x0 + (alpha_t.sqrt() * (1.0 - acp_prev) / denom) * x
-        # DDPM 公式 predict by eps
-        # mean1 = 1 / alpha_t.sqrt() * (x - beta_t / denom.sqrt() * eps)
-        
-        # # DDIM 确定性采样 (η=0): x_{t-1} = √ᾱ_{t-1} * x̂₀ + √(1-ᾱ_{t-1}) * ε_θ
-        # ddim_mean = acp_prev.sqrt() * pred_x0 + (1.0 - acp_prev).clamp(min=0.0).sqrt() * eps
-        # # DDIM 随机采样 (η>0):
-        # #   σ_t = η * √((1-ᾱ_{t-1})/(1-ᾱ_t)) * √β_t
-        # #   x_{t-1} = √ᾱ_{t-1} * x̂₀ + √(1-ᾱ_{t-1}-σ²) * ε_θ + σ_t * N(0,I)
-        # sigma_t = eta * ((1.0 - acp_prev) / denom).clamp(min=0.0).sqrt() * beta_t.sqrt()
-        # direction_coeff = (1.0 - acp_prev - sigma_t ** 2).clamp(min=0.0).sqrt()
-        # ddim_mean1 = acp_prev.sqrt() * pred_x0 + direction_coeff * eps + sigma_t * torch.randn_like(x)
-        if t == 0:
-            return mean
-        var = self.posterior_variance[t].clamp(min=1e-20)
-        return mean + var.sqrt() * torch.randn_like(x)
+        mean = None
+        if df_type == "ddpm_eps" or df_type == "ddpm_x0":
+            if df_type == "ddpm_x0":
+                # DDPM 公式 predict by x0
+                mean = (acp_prev.sqrt() * beta_t / denom) * pred_x0 + (alpha_t.sqrt() * (1.0 - acp_prev) / denom) * x
+            elif df_type == "ddpm_eps":
+                # DDPM 公式 predict by eps
+                mean = 1 / alpha_t.sqrt() * (x - beta_t / denom.sqrt() * eps)
+            else:
+                raise ValueError(f"Unsupported df_type: {df_type!r}.")
+            if t == 0:
+                return mean
+            var = self.posterior_variance[t].clamp(min=1e-20)
+            return mean + var.sqrt() * torch.randn_like(x)
+        if df_type == "ddim" or df_type == "ddim_rand":
+            if df_type == "ddim":
+                # DDIM 确定性采样 (η=0): x_{t-1} = √ᾱ_{t-1} * x̂₀ + √(1-ᾱ_{t-1}) * ε_θ
+                x = acp_prev.sqrt() * pred_x0 + (1.0 - acp_prev).clamp(min=0.0).sqrt() * eps
+            elif df_type == "ddim_rand":
+                # DDIM 随机 (η>0): σ_t = η * √((1-ᾱ_prev)/(1-ᾱ_t)) * √(1 - ᾱ_t/ᾱ_prev)
+                acp_prev_safe = acp_prev.clamp(min=1e-12)
+                sigma_t = (
+                    eta
+                    * ((1.0 - acp_prev) / denom).clamp(min=0.0).sqrt()
+                    * (1.0 - (acp_t / acp_prev_safe).clamp(max=1.0)).clamp(min=0.0).sqrt()
+                )
+                direction_coeff = (1.0 - acp_prev - sigma_t ** 2).clamp(min=0.0).sqrt()
+                x = acp_prev.sqrt() * pred_x0 + direction_coeff * eps + sigma_t * torch.randn_like(x)
+            else:
+                raise ValueError(f"Unsupported df_type: {df_type!r}.")
+            return x
+        raise ValueError(f"Unsupported df_type: {df_type!r}.")
 
     def sample_trajectory(self, batch: dict[str, torch.Tensor], sample_num: int = 0) -> torch.Tensor:
         """从纯噪声开始完整反向采样得到 future 轨迹 (B, L, C)。"""
@@ -192,10 +215,23 @@ class TrajDiffusionModelWrapper(torch.nn.Module):
         x = torch.randn(ref.shape, device=ref.device, dtype=ref.dtype)
         sample_steps = self.diffusion_steps // sample_num if sample_num > 0 else None
         x_samples = []
-        for t in range(self.diffusion_steps - 1, -1, -1):
-            x = self._p_sample_step(x, t, cond)
-            if sample_steps is not None and t % sample_steps == 0:
-                x_samples.append(x.clone())
+        if self.df_type == "ddim_rand" or self.df_type == "ddim":
+            stride = max(1, self.diffusion_steps // 10)
+            t = self.diffusion_steps - 1
+            while t >= 0:
+                t_next = max(0, t - stride)
+                x = self._p_sample_step(x, t, cond, df_type=self.df_type, t_next=t_next)
+                if sample_steps is not None and t % sample_steps == 0:
+                    x_samples.append(x.clone())
+                if t_next == 0:
+                    break
+                t = t_next
+        else:
+            for t in range(self.diffusion_steps - 1, -1, -1):
+                t_next = t - 1
+                x = self._p_sample_step(x, t, cond, df_type=self.df_type, t_next=t_next)
+                if sample_steps is not None and t % sample_steps == 0:
+                    x_samples.append(x.clone())
         return x, x_samples
 
     def forward(self, batch: dict[str, torch.Tensor], sample_num: int = 3) -> tuple[torch.Tensor, list[torch.Tensor]]:
@@ -221,10 +257,10 @@ class TrajDiffusionModelWrapper(torch.nn.Module):
     
     def order_diffusion_forward(
         self,
-        batch: dict[str, torch.Tensor],
+        future: torch.Tensor,
         sample_num: int = 1,
     ) -> list[torch.Tensor]:
-        x0 = batch["future"]
+        x0 = future.clone()
         step = self.diffusion_steps // sample_num if sample_num > 0 else 1
         timesteps = torch.arange(0, self.diffusion_steps, step=step, device=x0.device)
         timesteps = timesteps.unsqueeze(0).repeat(x0.shape[0], 1)  # (B, T)
@@ -298,11 +334,11 @@ class TrajDiffusionTrainableModel(TrainableModel):
         loss, x_noisy, pred_eps, timesteps = self.predictor.compute_noise_loss(self.normalizer.apply(batch))
         out = loss
 
-        # pred_future = self.predictor.compute_x0(x_noisy, pred_eps, timesteps)
-        # pred_future = self.normalizer.inverse_future(pred_future)
-        # metrics = self.metrics_fn(pred_future, batch["future"], batch["future_mask"])
-        # out.update({"pred_future": pred_future})
-        # out.update(metrics)
+        pred_future = self.predictor.compute_x0(x_noisy, pred_eps, timesteps)
+        pred_future = self.normalizer.inverse_future(pred_future)
+        metrics = self.metrics_fn(pred_future, batch["future"], batch["future_mask"])
+        out.update({"pred_future": pred_future})
+        out.update(metrics)
         return out
 
     def validation_step(self, batch: dict[str, torch.Tensor]) -> dict[str, torch.Tensor]:

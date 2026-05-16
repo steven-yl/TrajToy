@@ -16,8 +16,6 @@ if str(_SRC_DIR) not in sys.path:
 
 from trainflow.hydra_build import run_fit, run_validate, run_test, run_predict
 
-from il.training.close_val_mlp import run_close_eval
-
 OmegaConf.register_new_resolver("now", lambda fmt: datetime.now().strftime(fmt), replace=True)
 
 
@@ -30,7 +28,7 @@ def _run_mode(cfg: DictConfig) -> str:
     return str(rm)
 
 
-@hydra.main(version_base=None, config_path="conf", config_name="config")
+@hydra.main(version_base=None, config_path="conf", config_name="train_config")
 def main(cfg: DictConfig) -> None:
     logging.info(OmegaConf.to_yaml(cfg))
     mode = _run_mode(cfg)
@@ -45,9 +43,6 @@ def main(cfg: DictConfig) -> None:
             run_test(tf_cfg)
         elif mode == "predict":
             run_predict(tf_cfg)
-        logging.info("Done!")
-    elif mode == "close_eval":
-        run_close_eval(cfg)
         logging.info("Done!")
     else:
         raise ValueError(f"Unknown run mode: {mode}")

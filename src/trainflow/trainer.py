@@ -353,6 +353,7 @@ class Trainer:
             if metrics and self.global_step % self.log_every_n_steps == 0:
                 row = {f"train/{k}": float(v) for k, v in metrics.items()}
                 row.update(self._current_lr_metrics("train"))
+                row.update({"train/epoch": self.current_epoch})
                 self.log(row)
         self._call("on_train_epoch_end")
 
@@ -410,6 +411,7 @@ class Trainer:
                 agg.setdefault(key, []).append(float(value))
             self._call(batch_end_hook, output, batch, batch_idx)
         reduced = {f"{stage}/{k}": float(np.mean(v)) for k, v in agg.items() if v}
+        reduced.update({f"{stage}/epoch": self.current_epoch})
         self.current_metrics.update(reduced)
         self._call(epoch_end_hook)
         return reduced

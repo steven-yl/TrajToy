@@ -4,6 +4,7 @@ from typing import Any
 
 import torch.nn as nn
 from omegaconf import DictConfig, OmegaConf
+import logging
 
 try:
     from hydra.utils import instantiate
@@ -112,7 +113,7 @@ def _print_module_parameter_summary(module: nn.Module, *, name: str = "model") -
     n_trainable = sum(p.numel() for p in params if p.requires_grad)
     n_bytes = sum(p.numel() * p.element_size() for p in params)
     mib = n_bytes / (1024**2)
-    print(
+    logging.info(
         f"[{name}] params: total={n_total:,} trainable={n_trainable:,} "
         f"weight_bytes≈{n_bytes:,} (~{mib:.2f} MiB)"
     )
@@ -122,14 +123,14 @@ def _print_module_parameter_summary(module: nn.Module, *, name: str = "model") -
             continue
         ct = sum(p.numel() for p in child.parameters() if p.requires_grad)
         b = sum(p.numel() * p.element_size() for p in child.parameters())
-        print(f"  └─ {child_name}: {c:,} params ({ct:,} trainable), ~{b / (1024**2):.2f} MiB")
+        logging.info(f"  └─ {child_name}: {c:,} params ({ct:,} trainable), ~{b / (1024**2):.2f} MiB")
 
 
 def run_fit(cfg: DictConfig) -> None:
     """Instantiate trainflow and run ``fit``. Resume when ``resume_checkpoint`` is set or
     ``auto_load_checkpoint`` is true with ``checkpoint_path``.
     """
-    print("start train...")
+    logging.info("start train...")
     trainer, model, datamodule = instantiate_trainflow(cfg)
     if isinstance(model, nn.Module):
         _print_module_parameter_summary(model)
@@ -145,10 +146,10 @@ def run_fit(cfg: DictConfig) -> None:
         ckpt_strict=strict,
         ckpt_weights_only=weights_only,
     )
-    print("train done!")
+    logging.info("train done!")
 
 def run_validate(cfg: DictConfig) -> None:
-    print("start validate...")
+    logging.info("start validate...")
     trainer, model, datamodule = instantiate_trainflow(cfg)
     trainer.model = model
     if isinstance(model, nn.Module):
@@ -160,12 +161,12 @@ def run_validate(cfg: DictConfig) -> None:
     strict, weights_only = resolve_strict_weights_only(cfg)
     trainer.load_checkpoint(ckpt, strict=strict, weights_only=weights_only)
     metrics = trainer.validate()
-    print("validate done!")
+    logging.info("validate done!")
     return metrics
 
 
 def run_test(cfg: DictConfig) -> None:
-    print("start test...")
+    logging.info("start test...")
     trainer, model, datamodule = instantiate_trainflow(cfg)
     trainer.model = model
     if isinstance(model, nn.Module):
@@ -177,11 +178,11 @@ def run_test(cfg: DictConfig) -> None:
     strict, weights_only = resolve_strict_weights_only(cfg)
     trainer.load_checkpoint(ckpt, strict=strict, weights_only=weights_only)
     metrics = trainer.test()
-    print("test done!")
+    logging.info("test done!")
     return metrics
 
 def run_predict(cfg: DictConfig) -> list[Any]:
-    print("start predict...")
+    logging.info("start predict...")
     trainer, model, datamodule = instantiate_trainflow(cfg)
     trainer.model = model
     if isinstance(model, nn.Module):
@@ -193,5 +194,5 @@ def run_predict(cfg: DictConfig) -> list[Any]:
     strict, weights_only = resolve_strict_weights_only(cfg)
     trainer.load_checkpoint(ckpt, strict=strict, weights_only=weights_only)
     outputs = trainer.predict()
-    print("predict done!")
+    logging.info("predict done!")
     return outputs

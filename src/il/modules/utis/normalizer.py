@@ -127,5 +127,8 @@ class Normalizer:
             return torch.as_tensor(out, dtype=torch.float32)
         return out
 
+    def normalize_future(self, x: torch.Tensor) -> torch.Tensor:
+        return self.normalize("future", x)
+
     def inverse_future(self, x: torch.Tensor) -> torch.Tensor:
         return self.inverse_tensor("future", x)

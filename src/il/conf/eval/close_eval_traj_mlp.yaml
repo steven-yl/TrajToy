@@ -4,9 +4,12 @@ defaults:
   - /model@trainflow.model: traj_mlp_trainable_model
   - _self_
 
+close_eval:
+  _target_: il.evaluation.close_eval_mlp.CloseEvalMlp
+
 run_mode: close_eval
 auto_load_checkpoint: false
-resume_checkpoint: log/il_train_mlp_traj_train_20260510_111242/checkpoint/104-00013440.ckpt
+resume_checkpoint: log/il_train_traj_mlp_train_20260516_082344/checkpoint/final.ckpt
 strict: true
 weights_only: false
 
@@ -36,9 +39,9 @@ trainflow:
     auto_render: false
     render_fps: 30
 
-    # render_width: 2000
-    # render_height: 2000
-    # render_scale: 10.0
+    render_width: 2000
+    render_height: 1600
+    render_scale: 10.0
     # 随机初始化（开启后在范围内随机采样，覆盖上面的固定值）
     random_init: true
     random_config:

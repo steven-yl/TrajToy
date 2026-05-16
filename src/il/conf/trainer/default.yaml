@@ -1,6 +1,6 @@
 _target_: trainflow.trainer.Trainer
 _convert_: "all"
-max_epochs: 300
+max_epochs: 100
 accelerator: auto
 devices: null
 precision: "32"
@@ -31,7 +31,7 @@ callbacks:
     log_every_n_epochs: 5
     num_samples: 2
     tag: val_vis/trajectory
-    ncols: 2
+    ncols: 1
 logger:
   - _target_: trainflow.loggers.CSVLogger
     save_dir: ${hydra:runtime.output_dir}/metrics
