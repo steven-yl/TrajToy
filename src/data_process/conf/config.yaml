@@ -9,8 +9,9 @@ defaults:
   - creator: default
   - controller: default
   - preprocess: default
+  - analysis: default
   - env: default
   - _self_
 
-# 运行模式: all=生产+预处理, create=仅生产, preprocess=仅预处理
+# 运行模式: all=生产+预处理, create=仅生产, preprocess=仅预处理, analyze=仅数据分析
 run_mode: all

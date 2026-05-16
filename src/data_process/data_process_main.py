@@ -1,10 +1,11 @@
-"""Hydra 统一入口：数据生产 + 预处理。
+"""Hydra 统一入口：数据生产 + 预处理 + 质量分析。
 
 用法:
-    python -m data_process.data_process_main                       # 生产 + 预处理
-    python -m data_process.data_process_main run_mode=create       # 仅生产
+    python -m data_process.data_process_main                         # 生产 + 预处理
+    python -m data_process.data_process_main run_mode=create         # 仅生产
     python -m data_process.data_process_main run_mode=preprocess   # 仅预处理
-    python -m data_process.data_process_main run_mode=all          # 生产 + 预处理（默认）
+    python -m data_process.data_process_main run_mode=analyze        # 仅数据分析（读 preprocess 输出）
+    python -m data_process.data_process_main run_mode=all            # 生产 + 预处理（默认）
 """
 
 from __future__ import annotations
@@ -13,6 +14,7 @@ import hydra
 from omegaconf import DictConfig, OmegaConf
 
 from data_process.process.data_creator import DataCreator
+from data_process.process.data_analysis import analyze_directory
 from data_process.process.data_preprocess import preprocess_directory
 from sim_env.vehicle_controller import VehicleMPC
 from sim_env import (
@@ -39,6 +41,12 @@ def main(cfg: DictConfig) -> None:
         print("数据预处理")
         print("=" * 60)
         preprocess_directory(cfg)
+
+    if mode == "analyze":
+        print("\n" + "=" * 60)
+        print("数据集质量分析")
+        print("=" * 60)
+        analyze_directory(cfg)
 
 
 if __name__ == "__main__":

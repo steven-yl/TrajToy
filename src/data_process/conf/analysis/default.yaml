@@ -1,0 +1,29 @@
+# 与 preprocess 输出目录对齐（OmegaConf 字符串插值）。
+# 注意：creator.output_dir / preprocess.output_dir 默认随 Hydra 每次运行指向新的 runtime 目录。
+# 单独跑 analyze 时若未覆盖 preprocess.output_dir，新目录下通常还没有 preprocessed/。
+# 示例：python -m data_process.data_process_main run_mode=analyze preprocess.output_dir=/abs/path/to/某次hydra输出
+samples_dir: "${preprocess.output_dir}/preprocessed"
+preprocess_report_path: "${preprocess.output_dir}/preprocess_report.json"
+output_report_path: "${preprocess.output_dir}/analysis_report.json"
+# null 表示遍历目录下全部 .pkl；设为正整数则只处理前 N 个（按文件名排序，便于复现）
+max_samples: null
+# 若存在 preprocess_report.json，则校验样本数等元信息并写入报告
+verify_preprocess_report: true
+# centerline_max_v 与「未来有效段」速度最大值的允许绝对误差（与预处理填充逻辑对账）
+centerline_max_v_atol: 1.0e-5
+# road_segment_types 全局频次表在报告中保留的条数上限
+road_type_histogram_top_k: 40
+
+# 指标可视化（matplotlib Agg，输出 PNG）
+plot:
+  enable: true
+  output_dir: "${preprocess.output_dir}/analysis_plots"
+  dpi: 150
+  hist_bins: 72
+  # 叠画 (dx,dy) 轨迹条数上限（按样本顺序截取，避免超大图内存）
+  max_xy_trajectories: 400
+  # 07 轨迹叠画：线宽与不透明度（条数多时 alpha 自动下调，可用下列上下限约束）
+  xy_traj_linewidth: 1.15
+  xy_traj_alpha_min: 0.14
+  xy_traj_alpha_max: 0.62
+  xy_traj_alpha_scale: 130.0
