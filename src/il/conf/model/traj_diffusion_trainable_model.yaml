@@ -1,5 +1,6 @@
 defaults:
   - /modules/model@predictor.model: conditional_UNet1D_model
+  # - /modules/model@predictor.model: conditional_query_model
   - _self_
 
 
@@ -54,7 +55,7 @@ normalizer:
     # mean 保持 0：局部坐标下大致零中心；std 取常见量级，避免全程 raw 量级差异过大
     history:
       mean: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
-      std: [15.0, 10.0, 0.7, 12.0, 0.4, 3.0, 0.8]
+      std: [22.0, 12.0, 0.8, 12.0, 0.4, 3.0, 0.8]
     # future 前 4 维与 history 一致；预测更远，xy 略放大 std
     future:
       mean: [0.0, 0.0, 0.0, 0.0]

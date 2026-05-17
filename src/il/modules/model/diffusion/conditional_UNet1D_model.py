@@ -55,7 +55,7 @@ class ConditionalUNet1D(nn.Module):
             nn.Linear(time_embed_dim, time_embed_dim), nn.Mish(),
             nn.Linear(time_embed_dim, time_embed_dim)
         )
-        self.state_encoder = StateClsEncoder(
+        self.state_cls_encoder = StateClsEncoder(
             history_state_dim=history_state_dim,
             road_feature_dim=road_feature_dim,
             hidden_dim=scene_embed_dim,
@@ -101,7 +101,7 @@ class ConditionalUNet1D(nn.Module):
         
         # --- 1. Prepare Conditioning Vector ---
         time_embedding = self.time_encoder(timestep)
-        scene_embedding = self.state_encoder(cond)
+        scene_embedding = self.state_cls_encoder(cond)
         cond_embedding = torch.cat([time_embedding, scene_embedding], dim=1)
         
         # --- 2. U-Net Forward Pass ---
