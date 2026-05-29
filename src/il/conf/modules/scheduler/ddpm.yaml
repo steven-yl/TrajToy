@@ -1,0 +1,20 @@
+_target_: diffusers.DDPMScheduler
+num_train_timesteps: 1000
+beta_start: 0.0001
+beta_end: 0.02
+# linear | scaled_linear | squaredcos_cap_v2 | sigmoid
+beta_schedule: linear
+trained_betas: null
+# fixed_small | fixed_small_log | fixed_large | fixed_large_log | learned | learned_range
+variance_type: fixed_small
+clip_sample: true
+# epsilon | sample | v_prediction
+prediction_type: epsilon
+thresholding: false
+dynamic_thresholding_ratio: 0.995
+clip_sample_range: 1.0
+sample_max_value: 1.0
+# linspace | leading | trailing
+timestep_spacing: leading
+steps_offset: 0
+rescale_betas_zero_snr: false

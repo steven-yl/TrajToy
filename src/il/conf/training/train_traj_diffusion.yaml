@@ -2,7 +2,8 @@
 defaults:
   - /trainer@trainflow.trainer: default
   - /data@trainflow.data: traj_diffusion_data
-  - /model@trainflow.model: traj_diffusion_trainable_model
+  # - /model@trainflow.model: traj_diffusion_trainable_model
+  - /model@trainflow.model: traj_diffusers_trainable_model
   - _self_
 
 run_mode: train # train, validate, test

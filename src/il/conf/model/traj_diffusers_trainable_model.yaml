@@ -1,0 +1,84 @@
+defaults:
+  - /modules/model@predictor.model: conditional_UNet1D_model
+  # - /modules/model@predictor.model: conditional_query_model
+  - /modules/scheduler@predictor.noise_scheduler: ddim
+  - _self_
+
+
+_target_: il.model.traj_diffusers_trainable_model.TrajDiffusionTrainableModel
+_convert_: all
+
+# Optimizer & LR scheduler（TrainFlow 在每个 optimizer step 调用 scheduler.step()，步数均指更新步）。
+lr: 1.0e-3
+weight_decay: 1.0e-4
+# none | cosine | cosine_warmup（Linear warmup → Cosine）| step
+lr_scheduler: cosine_warmup
+cosine_t_max: 40000
+cosine_eta_min: 1.0e-5
+# cosine_warmup：warmup 步数；warmup 期内 lr 从 lr×warmup_start_factor 线性升到 lr。
+warmup_steps: 500
+warmup_start_factor: 1.0e-8
+# step：每隔 lr_step_size 步乘以 lr_gamma。
+lr_step_size: 30
+lr_gamma: 0.5
+
+
+# TrajDiffusionModelWrapper + ConditionalUNet1D（与 conditional_UNet1D_model.yaml 参数对齐）。
+predictor:
+  _target_: il.modules.utis.diffusion_core.DiffusionPipeline
+  # noise_scheduler: 由 defaults 定义
+  # predictor.model：由 defaults 中的 modules/model/conditional_UNet1D_model.yaml 注入；此处可写覆盖项。
+  model:
+    history_len: 5
+    future_len: 25
+    road_points: 60
+
+  # 反向采样步数：null 表示走 num_train_timesteps。
+  # DDPM 应保持 null;DDIM/DPM-Solver 等可显式给较小值(典型 50)以加速。
+  num_inference_steps: 10
+
+# TrajMetrics configuration.
+metrics_fn:
+  _target_: il.modules.metrics.traj_metrics.TrajMetrics
+  lon_fde_thresholds_m: [5.0, 15.0]
+
+# DiffusionMSELoss configuration.
+loss_fn:
+  _target_: il.modules.loss.diffusion_loss.DiffusionMSELoss
+
+# 归一化（扁平键名与 batch 字段一致，由 Normalizer 读取）
+normalizer:
+  _target_: il.modules.utis.normalizer.Normalizer
+  # history 每步 7 维: x,y(m,车体系), theta(rad), v(m/s), steer(rad), accel(m/s²), omega(rad/s)
+  # mean 保持 0：局部坐标下大致零中心；std 取常见量级，避免全程 raw 量级差异过大
+  parameters:
+    # history 每步 7 维: x,y(m,车体系), theta(rad), v(m/s), steer(rad), accel(m/s²), omega(rad/s)
+    # mean 保持 0：局部坐标下大致零中心；std 取常见量级，避免全程 raw 量级差异过大
+    history:
+      mean: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+      std: [22.0, 12.0, 0.8, 12.0, 0.4, 3.0, 0.8]
+    # future 前 4 维与 history 一致；预测更远，xy 略放大 std
+    future:
+      mean: [0.0, 0.0, 0.0, 0.0]
+      std: [22.0, 12.0, 0.8, 12.0]
+    # vehicle_params:
+    #   mean: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+    #   std: [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
+    # 道路点均为车体系 xy(m)；前方延伸通常大于横向摆动
+    centerline:
+      mean: [0.0, 0.0]
+      std: [35.0, 18.0]
+    left_boundary:
+      mean: [0.0, 0.0]
+      std: [35.0, 18.0]
+    right_boundary:
+      mean: [0.0, 0.0]
+      std: [35.0, 18.0]
+    # (..., D, N, 2) → 最后一维 2
+    lane_dividers:
+      mean: [0.0, 0.0]
+      std: [35.0, 18.0]
+    # 沿路限速 m/s；mean≈60km/h 量级，std 覆盖城快/高速差异（宜日后用统计值替换）
+    max_v:
+      mean: [16.67]
+      std: [11.11]

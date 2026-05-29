@@ -6,7 +6,7 @@ defaults:
 
 
 close_eval:
-  _target_: il.evaluation.close_eval_df.CloseEvalDf
+  _target_: il.eval.close_eval_df.CloseEvalDf
 
 run_mode: close_eval
 auto_load_checkpoint: false

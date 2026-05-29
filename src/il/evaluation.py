@@ -9,7 +9,7 @@ from pathlib import Path
 import hydra
 from omegaconf import DictConfig, OmegaConf
 import logging
-from il.evaluation.close_eval import instantiate_close_eval
+from il.eval.close_eval import instantiate_close_eval
 
 _SRC_DIR = Path(__file__).resolve().parents[1]
 if str(_SRC_DIR) not in sys.path:

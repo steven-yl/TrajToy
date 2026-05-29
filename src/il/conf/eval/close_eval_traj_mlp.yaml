@@ -5,7 +5,7 @@ defaults:
   - _self_
 
 close_eval:
-  _target_: il.evaluation.close_eval_mlp.CloseEvalMlp
+  _target_: il.eval.close_eval_mlp.CloseEvalMlp
 
 run_mode: close_eval
 auto_load_checkpoint: false
