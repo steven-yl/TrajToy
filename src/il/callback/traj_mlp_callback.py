@@ -57,8 +57,8 @@ class TrajVisualizationCallback(Callback):
         for i in range(num_to_collect):
             sample_data = {k: v[i].detach().cpu() for k, v in batch.items()}
             sample_data["pred_future"] = outputs["pred_future"][i].detach().cpu()
-            if "x_samples" in outputs:
-                sample_data["x_samples"] = [x[i].detach().cpu() for x in outputs["x_samples"]]
+            if "intermediates_samples" in outputs:
+                sample_data["intermediates_samples"] = [x[i].detach().cpu() for x in outputs["intermediates_samples"]]
             self._collected_samples.append(sample_data)
 
     def on_validation_epoch_end(self, trainer: Any) -> None:
@@ -85,7 +85,7 @@ class TrajVisualizationCallback(Callback):
 
         # 扩散去噪过程可视化（如果存在 x_samples）
         for idx, sample in enumerate(self._collected_samples):
-            if "x_samples" not in sample or not sample["x_samples"]:
+            if "intermediates_samples" not in sample or not sample["intermediates_samples"]:
                 continue
             step_dicts = DiffusionProcessVisualizer.build_step_dicts(sample)
             num_steps = len(step_dicts)

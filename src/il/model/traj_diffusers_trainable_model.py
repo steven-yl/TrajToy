@@ -81,16 +81,16 @@ class TrajDiffusionTrainableModel(TrainableModel):
         # out = {"pred_future": pred_future}
         # out.update(metrics)
         
-        pred_future, intermediates_sample = self.predictor.grid_sample(norm_batch, norm_batch["future"].shape)
+        pred_future, intermediates_samples = self.predictor.grid_sample(norm_batch, norm_batch["future"].shape)
         pred_future = self.normalizer.inverse_future(pred_future)
-        intermediates_sample = [self.normalizer.inverse_future(x) for x in intermediates_sample]
+        intermediates_samples = [self.normalizer.inverse_future(x) for x in intermediates_samples]
 
         metrics = self.metrics_fn(pred_future, batch["future"], batch["future_mask"])
         out = {"pred_future": pred_future}
         out.update(metrics)
-        out.update({"intermediates_sample": intermediates_sample})
+        out.update({"intermediates_samples": intermediates_samples})
 
-        out.update({"loss": torch.tensor(0.0, device=pred_future.device)})
+        out.update({"loss": metrics["xy_ade"]})
         return out
 
     def test_step(self, batch: dict[str, torch.Tensor]) -> dict[str, torch.Tensor]:
@@ -101,16 +101,16 @@ class TrajDiffusionTrainableModel(TrainableModel):
         # out = {"pred_future": pred_future}
         # out.update(metrics)
         
-        pred_future, intermediates_sample = self.predictor.grid_sample(norm_batch, norm_batch["future"].shape)
+        pred_future, intermediates_samples = self.predictor.grid_sample(norm_batch, norm_batch["future"].shape)
         pred_future = self.normalizer.inverse_future(pred_future)
-        intermediates_sample = [self.normalizer.inverse_future(x) for x in intermediates_sample]
+        intermediates_samples = [self.normalizer.inverse_future(x) for x in intermediates_samples]
         
         metrics = self.metrics_fn(pred_future, batch["future"], batch["future_mask"])
         out = {"pred_future": pred_future}
         out.update(metrics)
-        out.update({"intermediates_sample": intermediates_sample})
+        out.update({"intermediates_samples": intermediates_samples})
 
-        out.update({"loss": torch.tensor(0.0, device=pred_future.device)})
+        out.update({"loss": metrics["xy_ade"]})
         return out
 
     def predict_step(self, batch: dict[str, torch.Tensor]) -> dict[str, torch.Tensor]:
@@ -119,11 +119,11 @@ class TrajDiffusionTrainableModel(TrainableModel):
         # pred_future = self.normalizer.inverse_future(pred_future)
         # out = {"pred_future": pred_future}
         
-        pred_future, intermediates_sample = self.predictor.grid_sample(norm_batch, norm_batch["future"].shape)
+        pred_future, intermediates_samples = self.predictor.grid_sample(norm_batch, norm_batch["future"].shape)
         pred_future = self.normalizer.inverse_future(pred_future)
-        intermediates_sample = [self.normalizer.inverse_future(x) for x in intermediates_sample]
+        intermediates_samples = [self.normalizer.inverse_future(x) for x in intermediates_samples]
         out = {"pred_future": pred_future}
-        out.update({"intermediates_sample": intermediates_sample, "batch": batch})
+        out.update({"intermediates_samples": intermediates_samples, "batch": batch})
         return out
        
        

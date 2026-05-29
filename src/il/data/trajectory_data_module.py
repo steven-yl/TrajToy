@@ -24,9 +24,15 @@ class TrajectoryDataModule(DataModule):
         num_workers: int,
         pin_memory: bool,
         data_set: Dataset,
+        train_data_set: Dataset | None = None,
+        val_data_set: Dataset | None = None,
+        test_data_set: Dataset | None = None,
     ) -> None:
         super().__init__()
         self._data_set = data_set
+        self._train_data_set = train_data_set
+        self._val_data_set = val_data_set
+        self._test_data_set = test_data_set
         self._train_ratio = float(train_ratio)
         self._val_ratio = float(val_ratio)
         self._batch_size = int(batch_size)
@@ -43,20 +49,34 @@ class TrajectoryDataModule(DataModule):
     def setup(self, stage: Optional[str] = None) -> None:
         if self._full_ds is not None:
             return
-        ds = self._data_set
-        total = len(ds)
-        if total == 0:
-            raise ValueError("数据集为空")
+        if self._data_set is not None:
+            ds = self._data_set
+            total = len(ds)
+            if total == 0:
+                raise ValueError("数据集为空")
 
-        t_end = int(total * self._train_ratio)
-        v_end = t_end + int(total * self._val_ratio)
+            t_end = int(total * self._train_ratio)
+            v_end = t_end + int(total * self._val_ratio)
 
-        self._full_ds = ds
-        self._train_ds = Subset(ds, range(0, t_end))
-        self._val_ds = Subset(ds, range(t_end, v_end))
-        self._test_ds = Subset(ds, range(v_end, total))
+            self._full_ds = ds
+            self._train_ds = Subset(ds, range(0, t_end))
+            self._val_ds = Subset(ds, range(t_end, v_end))
+            self._test_ds = Subset(ds, range(v_end, total))
 
-        print(f" full_ds: {len(self._full_ds)}, train_ds: {len(self._train_ds)}, val_ds: {len(self._val_ds)}, test_ds: {len(self._test_ds)}")
+            print(f" full_ds: {len(self._full_ds)}, train_ds: {len(self._train_ds)}, val_ds: {len(self._val_ds)}, test_ds: {len(self._test_ds)}")
+            return
+
+        if self._train_data_set is not None and self._val_data_set is not None and self._test_data_set is not None:
+            self._train_ds = self._train_data_set
+            self._val_ds = self._val_data_set
+            self._test_ds = self._test_data_set
+
+            total = len(self._train_ds) + len(self._val_ds) + len(self._test_ds)
+            if total == 0:
+                raise ValueError("数据集为空")
+
+            print(f" full_ds: {total}, train_ds: {len(self._train_ds)}, val_ds: {len(self._val_ds)}, test_ds: {len(self._test_ds)}")
+            return
 
     def _loader_kw(self) -> dict:
         return {"num_workers": self._num_workers, "pin_memory": self._pin_memory}
