@@ -4,10 +4,10 @@ from __future__ import annotations
 
 from typing import Optional
 
-from torch.utils.data import DataLoader, Dataset, Subset
+from torch.utils.data import ConcatDataset, DataLoader, Dataset, Subset
 
 from trainflow.data import DataModule
-
+import logging
 
 class TrajectoryDataModule(DataModule):
     """划分 train/val/test 并构造 DataLoader。
@@ -23,7 +23,7 @@ class TrajectoryDataModule(DataModule):
         batch_size: int,
         num_workers: int,
         pin_memory: bool,
-        data_set: Dataset,
+        data_set: Dataset | None = None,
         train_data_set: Dataset | None = None,
         val_data_set: Dataset | None = None,
         test_data_set: Dataset | None = None,
@@ -39,9 +39,9 @@ class TrajectoryDataModule(DataModule):
         self._num_workers = int(num_workers)
         self._pin_memory = bool(pin_memory)
         self._full_ds: Dataset | None = None
-        self._train_ds: Subset | None = None
-        self._val_ds: Subset | None = None
-        self._test_ds: Subset | None = None
+        self._train_ds: Dataset | None = None
+        self._val_ds: Dataset | None = None
+        self._test_ds: Dataset | None = None
 
     def prepare_data(self) -> None:
         return None
@@ -62,21 +62,18 @@ class TrajectoryDataModule(DataModule):
             self._train_ds = Subset(ds, range(0, t_end))
             self._val_ds = Subset(ds, range(t_end, v_end))
             self._test_ds = Subset(ds, range(v_end, total))
-
-            print(f" full_ds: {len(self._full_ds)}, train_ds: {len(self._train_ds)}, val_ds: {len(self._val_ds)}, test_ds: {len(self._test_ds)}")
-            return
-
-        if self._train_data_set is not None and self._val_data_set is not None and self._test_data_set is not None:
+        elif self._train_data_set is not None and self._val_data_set is not None and self._test_data_set is not None:
             self._train_ds = self._train_data_set
             self._val_ds = self._val_data_set
             self._test_ds = self._test_data_set
-
-            total = len(self._train_ds) + len(self._val_ds) + len(self._test_ds)
-            if total == 0:
-                raise ValueError("数据集为空")
-
-            print(f" full_ds: {total}, train_ds: {len(self._train_ds)}, val_ds: {len(self._val_ds)}, test_ds: {len(self._test_ds)}")
-            return
+            self._full_ds = ConcatDataset(
+                [self._train_ds, self._val_ds, self._test_ds]
+            )
+            if len(self._full_ds) == 0:
+                raise ValueError("full数据集为空")
+            if len(self._val_ds) == 0:
+                raise ValueError("val数据集为空")
+        logging.info(f" full_ds: {len(self._full_ds)}, train_ds: {len(self._train_ds)}, val_ds: {len(self._val_ds)}, test_ds: {len(self._test_ds)}")
 
     def _loader_kw(self) -> dict:
         return {"num_workers": self._num_workers, "pin_memory": self._pin_memory}

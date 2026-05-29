@@ -1,10 +1,14 @@
 from __future__ import annotations
 
+import logging
+import os
+import platform
+import sys
 from typing import Any
 
+import torch
 import torch.nn as nn
 from omegaconf import DictConfig, OmegaConf
-import logging
 
 try:
     from hydra.utils import instantiate
@@ -106,24 +110,128 @@ def instantiate_trainflow(cfg: DictConfig) -> tuple[Any, Any, Any]:
     return trainer, model, datamodule
 
 
-def _print_module_parameter_summary(module: nn.Module, *, name: str = "model") -> None:
-    """打印总参数量、可训练参数量及按 dtype 估算的权重体积（与优化器状态无关）。"""
-    params = list(module.parameters())
-    n_total = sum(p.numel() for p in params)
-    n_trainable = sum(p.numel() for p in params if p.requires_grad)
-    n_bytes = sum(p.numel() * p.element_size() for p in params)
-    mib = n_bytes / (1024**2)
+def _dist_world_size() -> int:
+    try:
+        import torch.distributed as dist
+
+        if dist.is_available() and dist.is_initialized():
+            return dist.get_world_size()
+    except Exception:
+        pass
+    return 1
+
+
+def _print_runtime_env(trainer: Any) -> None:
+    """打印 Trainer 启动时的运行环境概况:device / torch / 精度 / 分布式。
+
+    Args:
+        trainer: 已构造好的 ``Trainer`` 实例,需要其暴露
+            ``device`` / ``precision`` / ``scaler`` / ``strategy`` 等字段。
+    """
+    py_ver = sys.version.split()[0]
+    torch_ver = torch.__version__
+    os_info = f"{platform.system()} {platform.release()} ({platform.machine()})"
+
+    device = trainer.device
+    if device.type == "cuda":
+        idx = device.index if device.index is not None else 0
+        gpu_name = torch.cuda.get_device_name(idx)
+        total_mem_gib = torch.cuda.get_device_properties(idx).total_memory / (1024**3)
+        cuda_ver = torch.version.cuda or "unknown"
+        cudnn_ver = (
+            torch.backends.cudnn.version()
+            if torch.backends.cudnn.is_available()
+            else None
+        )
+        device_desc = (
+            f"cuda:{idx} ({gpu_name}, {total_mem_gib:.1f} GiB) "
+            f"| CUDA {cuda_ver} | cuDNN {cudnn_ver}"
+        )
+        visible = os.environ.get("CUDA_VISIBLE_DEVICES")
+        if visible is not None:
+            device_desc += f" | CUDA_VISIBLE_DEVICES={visible}"
+    elif device.type == "mps":
+        device_desc = "mps (Apple Silicon)"
+    else:
+        device_desc = f"cpu ({os.cpu_count()} logical cores)"
+
+    precision = str(trainer.precision)
+    amp_mode = "off"
+    if precision in {"16", "16-mixed"}:
+        amp_mode = "fp16-mixed"
+    elif precision in {"bf16", "bf16-mixed"}:
+        amp_mode = "bf16-mixed"
+
+    logging.info("=== TrainFlow runtime ===")
+    logging.info(f"  python : {py_ver}  |  torch : {torch_ver}  |  os : {os_info}")
+    logging.info(f"  device : {device_desc}")
+    logging.info(
+        f"  precision : {precision}  |  autocast : {amp_mode}  "
+        f"|  grad_scaler : {trainer.scaler.is_enabled()}"
+    )
+    logging.info(
+        f"  strategy : {trainer.strategy.__class__.__name__}  "
+        f"|  global_zero : {trainer.strategy.is_global_zero}  "
+        f"|  world_size : {_dist_world_size()}"
+    )
+    logging.info(
+        f"  max_epochs : {trainer.max_epochs}  "
+        f"|  grad_accum : {trainer.gradient_accumulation_steps}  "
+        f"|  grad_clip : {trainer.gradient_clip_val}  "
+        f"|  compile : {trainer.compiler}"
+    )
+    logging.info("=========================")
+
+
+def _print_module_parameter_summary(
+    module: nn.Module,
+    *,
+    name: str = "model",
+    max_depth: int = 3,
+) -> None:
+    """打印参数量摘要,按 ``max_depth`` 层级递归展开各子模块。
+
+    Args:
+        module: 顶层模块。
+        name: 顶层显示名。
+        max_depth: 递归深度;``1`` 仅展开直接子模块,``2`` 多展开一层,以此类推。
+            自身永远会被打印,只对子模块的展开起作用。
+    """
+
+    def _stats(m: nn.Module) -> tuple[int, int, int]:
+        params = list(m.parameters())
+        total = sum(p.numel() for p in params)
+        trainable = sum(p.numel() for p in params if p.requires_grad)
+        bytes_ = sum(p.numel() * p.element_size() for p in params)
+        return total, trainable, bytes_
+
+    def _line(prefix: str, label: str, total: int, trainable: int, bytes_: int) -> str:
+        mib = bytes_ / (1024**2)
+        return (
+            f"{prefix}{label}: {total:,} params "
+            f"({trainable:,} trainable), ~{mib:.2f} MiB"
+        )
+
+    n_total, n_trainable, n_bytes = _stats(module)
     logging.info(
         f"[{name}] params: total={n_total:,} trainable={n_trainable:,} "
-        f"weight_bytes≈{n_bytes:,} (~{mib:.2f} MiB)"
+        f"weight_bytes≈{n_bytes:,} (~{n_bytes / (1024**2):.2f} MiB)"
     )
-    for child_name, child in module.named_children():
-        c = sum(p.numel() for p in child.parameters())
-        if c == 0:
-            continue
-        ct = sum(p.numel() for p in child.parameters() if p.requires_grad)
-        b = sum(p.numel() * p.element_size() for p in child.parameters())
-        logging.info(f"  └─ {child_name}: {c:,} params ({ct:,} trainable), ~{b / (1024**2):.2f} MiB")
+
+    def _walk(m: nn.Module, depth: int, indent: str) -> None:
+        if depth >= max_depth:
+            return
+        children = [(n, c) for n, c in m.named_children() if any(True for _ in c.parameters())]
+        last_idx = len(children) - 1
+        for i, (child_name, child) in enumerate(children):
+            total, trainable, bytes_ = _stats(child)
+            branch = "└─" if i == last_idx else "├─"
+            label = f"{child_name} ({type(child).__name__})"
+            logging.info(_line(f"{indent}{branch} ", label, total, trainable, bytes_))
+            next_indent = indent + ("   " if i == last_idx else "│  ")
+            _walk(child, depth + 1, next_indent)
+
+    _walk(module, depth=0, indent="  ")
 
 
 def run_fit(cfg: DictConfig) -> None:
@@ -132,6 +240,7 @@ def run_fit(cfg: DictConfig) -> None:
     """
     logging.info("start train...")
     trainer, model, datamodule = instantiate_trainflow(cfg)
+    _print_runtime_env(trainer)
     if isinstance(model, nn.Module):
         _print_module_parameter_summary(model)
     ckpt = fit_resume_checkpoint_path(cfg)
@@ -151,6 +260,7 @@ def run_fit(cfg: DictConfig) -> None:
 def run_validate(cfg: DictConfig) -> None:
     logging.info("start validate...")
     trainer, model, datamodule = instantiate_trainflow(cfg)
+    _print_runtime_env(trainer)
     trainer.model = model
     if isinstance(model, nn.Module):
         _print_module_parameter_summary(model)
@@ -168,6 +278,7 @@ def run_validate(cfg: DictConfig) -> None:
 def run_test(cfg: DictConfig) -> None:
     logging.info("start test...")
     trainer, model, datamodule = instantiate_trainflow(cfg)
+    _print_runtime_env(trainer)
     trainer.model = model
     if isinstance(model, nn.Module):
         _print_module_parameter_summary(model)
@@ -184,6 +295,7 @@ def run_test(cfg: DictConfig) -> None:
 def run_predict(cfg: DictConfig) -> list[Any]:
     logging.info("start predict...")
     trainer, model, datamodule = instantiate_trainflow(cfg)
+    _print_runtime_env(trainer)
     trainer.model = model
     if isinstance(model, nn.Module):
         _print_module_parameter_summary(model)
