@@ -43,7 +43,6 @@ class VisualizerBase(ABC):
         save_path: str | Path | None = None,
         show: bool = False,
         ax: Axes | None = None,
-        ncols: int = 2,
         close: bool = True,
         **kwargs,
     ) -> Figure:
@@ -53,7 +52,7 @@ class VisualizerBase(ABC):
         ----------
         data : dict | list[dict]
             单条数据字典，或多条数据的列表。
-            传入列表时自动创建多子图网格布局。
+            传入列表时按单列多行创建多子图布局。
         figsize : tuple, optional
             图片尺寸，默认 (12, 8)。传入列表时会自动按子图数量调整。
         dpi : int, optional
@@ -66,8 +65,6 @@ class VisualizerBase(ABC):
             是否调用 plt.show() 展示图片。
         ax : Axes, optional
             外部传入的 Axes（仅 data 为单条 dict 时生效）。
-        ncols : int
-            多子图时每行的列数，默认 2。
         close : bool
             绘制完成后是否自动关闭 figure（防止内存泄漏）。
             当 show=True 或外部传入 ax 时自动设为 False。
@@ -107,13 +104,12 @@ class VisualizerBase(ABC):
                 fig, _ = plt.subplots(1, 1, figsize=cls.DEFAULT_FIGSIZE, dpi=dpi)
                 return fig
 
-            ncols = min(ncols, num_samples)
-            nrows = (num_samples + ncols - 1) // ncols
+            nrows = num_samples
             subplot_w, subplot_h = cls.DEFAULT_FIGSIZE
-            figsize = figsize or (subplot_w * ncols, subplot_h * nrows)
+            figsize = figsize or (subplot_w, subplot_h * nrows)
 
-            fig, axes = plt.subplots(nrows, ncols, figsize=figsize, dpi=dpi)
-            axes_flat = np.asarray(axes).ravel() if num_samples > 1 else [axes]
+            fig, axes = plt.subplots(nrows, 1, figsize=figsize, dpi=dpi)
+            axes_flat = np.atleast_1d(axes).ravel()
 
             titles = title if isinstance(title, list) else [title] * num_samples
 
@@ -128,10 +124,6 @@ class VisualizerBase(ABC):
                 current_ax.set_aspect("equal")
                 current_ax.grid(True, alpha=0.3)
                 current_ax.legend(loc="upper right", fontsize=7)
-
-            # 隐藏多余的子图
-            for idx in range(num_samples, len(axes_flat)):
-                axes_flat[idx].set_visible(False)
 
         fig.tight_layout()
 
@@ -196,6 +188,46 @@ class VisualizerBase(ABC):
         finally:
             matplotlib.use(original_backend)
         return fig
+
+
+    @classmethod
+    def log_to_image(
+        cls,
+        data: dict[str, Any] | list[dict[str, Any]],
+        *,
+        figsize: tuple[float, float] | None = None,
+        dpi: int | None = None,
+        title: str | list[str] | None = None,
+        save_path: str | Path | None = None,
+        **kwargs,
+    ) -> str | None:
+        """将可视化结果写入图片。
+
+        Parameters
+        ----------
+        data : dict | list[dict]
+            单条或多条数据。
+        figsize : tuple, optional
+            图片尺寸。
+        dpi : int, optional
+            图片分辨率。
+        title : str | list[str], optional
+            图片标题。
+        **kwargs
+            传递给子类 `_draw` 的额外参数。
+
+        Returns
+        -------
+        str | None
+            图片保存路径。
+        """
+        original_backend = matplotlib.get_backend()
+        matplotlib.use("Agg")
+        try:
+            fig = cls.plot(data, figsize=figsize, dpi=dpi, title=title, close=True, save_path=save_path, **kwargs)
+        finally:
+            matplotlib.use(original_backend)
+        return save_path
 
     @classmethod
     def to_numpy_image(

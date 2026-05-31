@@ -90,7 +90,7 @@ class TrajDiffusionTrainableModel(TrainableModel):
         out.update(metrics)
         out.update({"x_samples": x_samples})
 
-        out.update({"loss": metrics["xy_ade"]})
+        out.update({"loss": torch.tensor(0.0, device=pred_future.device)})
         return out
 
     def test_step(self, batch: dict[str, torch.Tensor]) -> dict[str, torch.Tensor]:
@@ -110,7 +110,7 @@ class TrajDiffusionTrainableModel(TrainableModel):
         out.update(metrics)
         out.update({"x_samples": x_samples})
 
-        out.update({"loss": metrics["xy_ade"]})
+        out.update({"loss": torch.tensor(0.0, device=pred_future.device)})
         return out
 
     def predict_step(self, batch: dict[str, torch.Tensor]) -> dict[str, torch.Tensor]:

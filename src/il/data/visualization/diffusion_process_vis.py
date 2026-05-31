@@ -48,7 +48,7 @@ class DiffusionProcessVisualizer(VisualizerBase):
         """将单个样本中的 x_samples 展开为每步一个 dict 的列表。
 
         返回的 list[dict] 可直接传给 ``plot()`` / ``log_to_tensorboard()``
-        实现多子图网格布局。
+        实现单列多行布局。
 
         Parameters
         ----------
@@ -94,8 +94,6 @@ class DiffusionProcessVisualizer(VisualizerBase):
     def plot_diffusion(
         cls,
         data: dict[str, Any],
-        *,
-        ncols: int = 4,
         **kwargs,
     ) -> Figure:
         """便捷方法：一步完成扩散过程的多子图可视化。
@@ -107,8 +105,6 @@ class DiffusionProcessVisualizer(VisualizerBase):
         ----------
         data : dict
             包含 x_samples 的样本数据。
-        ncols : int
-            每行最多列数，默认 4。
         **kwargs
             透传给 VisualizerBase.plot()。
 
@@ -124,8 +120,7 @@ class DiffusionProcessVisualizer(VisualizerBase):
             label = f"t={timestep}" if timestep > 0 else "t=0 (final)"
             titles.append(label)
 
-        ncols = min(ncols, num_steps)
-        return cls.plot(step_dicts, title=titles, ncols=ncols, **kwargs)
+        return cls.plot(step_dicts, title=titles, **kwargs)
 
     @classmethod
     def _draw(cls, ax: Axes, data: dict[str, Any], **kwargs) -> None:
