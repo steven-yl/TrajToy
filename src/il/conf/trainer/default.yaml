@@ -32,7 +32,7 @@ callbacks:
     num_samples: 2
     tag: val_vis/trajectory
     tensorboard_show: true
-    image_save_dir: ${hydra:runtime.output_dir}/tb/images
+    # image_save_dir: ${hydra:runtime.output_dir}/tb/images
   # - _target_: il.callback.traj_mlp_callback.HParamsCallback
   #   hparams:
   #     lr: ${trainflow.model.lr}

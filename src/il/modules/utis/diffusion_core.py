@@ -88,7 +88,8 @@ class DiffusionSampler:
         timesteps = noise_scheduler.timesteps
 
         sample_result = torch.randn(shape, device=device)
-        intermediates_sample: list[torch.Tensor] = []
+        x_samples: list[torch.Tensor] = []
+        x_samples_timesteps: list[int] = []
         snap_stride = (
             max(1, len(timesteps) // intermediates_num)
             if intermediates_num > 0
@@ -99,11 +100,11 @@ class DiffusionSampler:
             sample_result = DiffusionSampler.step(
                 model, noise_scheduler, sample_result, t, batch,
             )
-            if snap_stride and i % snap_stride == 0:
-                intermediates_sample.append(sample_result)
-
+            if snap_stride and (i == 0 or i == len(timesteps) - 1 or i % snap_stride == 0):
+                x_samples.append(sample_result)
+                x_samples_timesteps.append(t)
         if intermediates_num > 0:
-            return sample_result, intermediates_sample
+            return sample_result, x_samples, x_samples_timesteps
         return sample_result
 
 
@@ -156,7 +157,7 @@ class DiffusionPipeline(nn.Module):
         shape: torch.Size | tuple[int, ...],
         device: torch.device | str | None = None,
         intermediates_num: int = 5,
-    ) -> tuple[torch.Tensor, list[torch.Tensor]]:
+    ) -> tuple[torch.Tensor, list[torch.Tensor], list[int]]:
         return DiffusionSampler.sample(
             self.model,
             self.noise_scheduler,

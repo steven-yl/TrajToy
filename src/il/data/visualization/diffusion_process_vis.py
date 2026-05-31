@@ -62,15 +62,19 @@ class DiffusionProcessVisualizer(VisualizerBase):
             每个 dict 包含单步绘图所需的全部信息。
         """
         x_samples = data.get("x_samples", [])
-        x_samples = list(x_samples.unbind(0)) if isinstance(x_samples, torch.Tensor) else x_samples
-        if not x_samples:
-            raise ValueError("data 中不包含 x_samples")
+        x_samples_timesteps = data.get("x_samples_timesteps", [])
+        if not isinstance(x_samples_timesteps, list):
+            x_samples_timesteps = [t for t in x_samples_timesteps]
+        if not x_samples or not x_samples_timesteps:
+            raise ValueError("data 中不包含 x_samples 或 x_samples_timesteps")
+        if len(x_samples) != len(x_samples_timesteps):
+            raise ValueError("x_samples 和 x_samples_timesteps 长度不一致")
 
-        num_steps = len(x_samples)
         step_dicts = []
-        for idx, x_sample_tensor in enumerate(x_samples):
+        for x_sample_tensor, x_sample_timestep in zip(x_samples, x_samples_timesteps):
             step_dict = {
                 "x_sample": cls._to_numpy(x_sample_tensor),
+                "x_sample_timestep": x_sample_timestep,
                 "future": cls._to_numpy(data["future"]),
                 "future_mask": cls._to_numpy(data["future_mask"]),
                 "centerline": cls._to_numpy(data["centerline"]),
@@ -84,8 +88,6 @@ class DiffusionProcessVisualizer(VisualizerBase):
                 step_dict["right_boundary"] = cls._to_numpy(data["right_boundary"])
                 step_dict["right_boundary_mask"] = cls._to_numpy(data["right_boundary_mask"])
 
-            step_dict["_step_index"] = idx
-            step_dict["_num_steps"] = num_steps
             step_dicts.append(step_dict)
 
         return step_dicts

@@ -81,14 +81,14 @@ class TrajDiffusionTrainableModel(TrainableModel):
         # out = {"pred_future": pred_future}
         # out.update(metrics)
         
-        pred_future, x_samples = self.predictor.grid_sample(norm_batch, norm_batch["future"].shape)
+        pred_future, x_samples, x_samples_timesteps = self.predictor.grid_sample(norm_batch, norm_batch["future"].shape)
         pred_future = self.normalizer.inverse_future(pred_future)
         x_samples = [self.normalizer.inverse_future(x) for x in x_samples]
 
         metrics = self.metrics_fn(pred_future, batch["future"], batch["future_mask"])
         out = {"pred_future": pred_future}
         out.update(metrics)
-        out.update({"x_samples": x_samples})
+        out.update({"x_samples": x_samples, "x_samples_timesteps": x_samples_timesteps})
 
         out.update({"loss": torch.tensor(0.0, device=pred_future.device)})
         return out
@@ -101,14 +101,14 @@ class TrajDiffusionTrainableModel(TrainableModel):
         # out = {"pred_future": pred_future}
         # out.update(metrics)
         
-        pred_future, x_samples = self.predictor.grid_sample(norm_batch, norm_batch["future"].shape)
+        pred_future, x_samples, x_samples_timesteps = self.predictor.grid_sample(norm_batch, norm_batch["future"].shape)
         pred_future = self.normalizer.inverse_future(pred_future)
         x_samples = [self.normalizer.inverse_future(x) for x in x_samples]
         
         metrics = self.metrics_fn(pred_future, batch["future"], batch["future_mask"])
         out = {"pred_future": pred_future}
         out.update(metrics)
-        out.update({"x_samples": x_samples})
+        out.update({"x_samples": x_samples, "x_samples_timesteps": x_samples_timesteps})
 
         out.update({"loss": torch.tensor(0.0, device=pred_future.device)})
         return out
@@ -119,11 +119,11 @@ class TrajDiffusionTrainableModel(TrainableModel):
         # pred_future = self.normalizer.inverse_future(pred_future)
         # out = {"pred_future": pred_future}
         
-        pred_future, x_samples = self.predictor.grid_sample(norm_batch, norm_batch["future"].shape)
+        pred_future, x_samples, x_samples_timesteps = self.predictor.grid_sample(norm_batch, norm_batch["future"].shape)
         pred_future = self.normalizer.inverse_future(pred_future)
         x_samples = [self.normalizer.inverse_future(x) for x in x_samples]
         out = {"pred_future": pred_future}
-        out.update({"x_samples": x_samples, "batch": batch})
+        out.update({"x_samples": x_samples, "x_samples_timesteps": x_samples_timesteps, "batch": batch})
         return out
        
        

@@ -88,6 +88,8 @@ class TrajVisualizationCallback(Callback):
             sample_data["pred_future"] = outputs["pred_future"][i].detach().cpu()
             if "x_samples" in outputs:
                 sample_data["x_samples"] = [x[i].detach().cpu() for x in outputs["x_samples"]]
+            if "x_samples_timesteps" in outputs:
+                sample_data["x_samples_timesteps"] = list(outputs["x_samples_timesteps"])
             self._collected_samples.append(sample_data)
 
     def on_validation_epoch_end(self, trainer: Any) -> None:
@@ -118,14 +120,13 @@ class TrajVisualizationCallback(Callback):
             )
 
         for idx, sample in enumerate(self._collected_samples):
-            if "x_samples" not in sample or not sample["x_samples"]:
+            if (
+                not sample.get("x_samples")
+                or not sample.get("x_samples_timesteps")
+            ):
                 continue
             step_dicts = DiffusionProcessVisualizer.build_step_dicts(sample)
-            num_steps = len(step_dicts)
-            step_titles = [
-                f"t={num_steps - 1 - i}" if i < num_steps - 1 else "t=0 (final)"
-                for i in range(num_steps)
-            ]
+            step_titles = [f"t={step_dict['x_sample_timestep']:.2f}" for step_dict in step_dicts]
             if self._tensorboard_show:
                 DiffusionProcessVisualizer.log_to_tensorboard(
                     writer,
