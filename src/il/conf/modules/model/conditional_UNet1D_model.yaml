@@ -6,9 +6,9 @@ future_len: 25
 time_embed_dim: 128
 scene_embed_dim: 128
 down_dims:
+  - 32
   - 64
   - 128
-  - 256
 history_state_dim: 7
 road_feature_dim: 2
 history_len: 10

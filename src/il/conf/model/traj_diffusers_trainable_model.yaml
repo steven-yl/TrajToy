@@ -35,7 +35,7 @@ predictor:
 
   # 反向采样步数：null 表示走 num_train_timesteps。
   # DDPM 应保持 null;DDIM/DPM-Solver 等可显式给较小值(典型 50)以加速。
-  num_inference_steps: 100
+  num_inference_steps: 10
 
 # TrajMetrics configuration.
 metrics_fn:

@@ -11,11 +11,12 @@ hydra:
     subdir: ${hydra.job.num}
 
 defaults:
-  # close_eval_traj_mlp, close_eval_traj_diffusion (choose one)
-  - eval@: close_eval_traj_diffusion
+  # close_eval_traj_mlp, close_eval_traj_diffusion, close_eval_traj_diffusers (choose one)
+  - eval@: close_eval_traj_diffusers
   - override hydra/job_logging: custom   # 覆盖 Hydra 内置的 job_logging，避免 Multiple values
   - _self_
 
 run_mode: close_eval
-# resume_checkpoint: log/il_train_traj_mlp_train_20260516_082344/checkpoint/final.ckpt
+# resume_checkpoint: log/il_train_traj_mlp_train_20260530_104406/checkpoint/final.ckpt
+resume_checkpoint: log/il_train_traj_diffusion_train_20260601_084130/checkpoint/final.ckpt
 
