@@ -307,6 +307,7 @@ def run_validate(cfg: DictConfig) -> None:
     setup_distributed()
     try:
         logging.info("start validate...")
+        _maybe_seed(cfg)
         trainer, model, datamodule = instantiate_trainflow(cfg)
         _print_runtime_env(trainer)
         trainer.model = model
@@ -331,6 +332,7 @@ def run_test(cfg: DictConfig) -> None:
     setup_distributed()
     try:
         logging.info("start test...")
+        _maybe_seed(cfg)
         trainer, model, datamodule = instantiate_trainflow(cfg)
         _print_runtime_env(trainer)
         trainer.model = model
@@ -355,6 +357,7 @@ def run_predict(cfg: DictConfig) -> list[Any]:
     setup_distributed()
     try:
         logging.info("start predict...")
+        _maybe_seed(cfg)
         trainer, model, datamodule = instantiate_trainflow(cfg)
         _print_runtime_env(trainer)
         trainer.model = model
