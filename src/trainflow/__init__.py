@@ -11,7 +11,13 @@ from .callbacks import (
 )
 from .config import instantiate, instantiate_hydra_node, instantiate_many
 from .data import DataModule
-from .distributed import clone_dataloader_with_sampler, is_distributed, make_distributed_sampler
+from .distributed import (
+    clone_dataloader_with_sampler,
+    is_distributed,
+    make_distributed_sampler,
+    setup_distributed,
+    teardown_distributed,
+)
 from .hydra_build import instantiate_trainflow, run_fit, run_validate, run_test, run_predict
 from .loggers import CSVLogger, Logger, LoggerCollection, NoOpLogger, TensorBoardLogger
 from .metrics import MetricCollector
@@ -65,5 +71,7 @@ __all__ = [
     "run_test",
     "run_predict",
     "seed_everything",
+    "setup_distributed",
+    "teardown_distributed",
     "worker_init_fn",
 ]

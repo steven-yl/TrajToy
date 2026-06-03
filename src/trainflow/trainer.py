@@ -697,6 +697,9 @@ class Trainer:
         if torch.cuda.is_available():
             self._validate_devices()
             local_rank = int(os.environ.get("LOCAL_RANK", "0"))
+            # Keep the per-process current device in sync with the bound device so DDP's
+            # ``torch.cuda.current_device()`` (used for device_ids) and collective ops match.
+            torch.cuda.set_device(local_rank)
             return torch.device(f"cuda:{local_rank}")
         return torch.device("cpu")
 

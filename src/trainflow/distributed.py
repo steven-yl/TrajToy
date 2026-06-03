@@ -8,10 +8,70 @@ uninitialised, so single-device code paths stay bit-for-bit unchanged.
 from __future__ import annotations
 
 import inspect
+import logging
+import os
+from datetime import timedelta
 from typing import Optional
 
+import torch
 import torch.distributed as dist
 from torch.utils.data import DataLoader, Dataset, DistributedSampler
+
+
+def setup_distributed(timeout_seconds: int = 1800) -> bool:
+    """Initialise the process group when launched under a multi-rank launcher (e.g. ``torchrun``).
+
+    Single source of truth for bringing ``torch.distributed`` up. Behaviour:
+
+    - ``WORLD_SIZE`` unset or ``<= 1``: no-op, returns ``False`` (single-device path unchanged).
+    - process group already initialised: no-op, returns ``True`` (idempotent).
+    - otherwise: binds the current process to ``cuda:LOCAL_RANK`` (when CUDA is available) **before**
+      ``init_process_group`` so collectives and ``DistributedDataParallel`` use the right device,
+      then initialises the group (``nccl`` on CUDA, ``gloo`` on CPU).
+
+    Reads ``WORLD_SIZE`` / ``RANK`` / ``LOCAL_RANK`` from the environment, exactly as ``torchrun``
+    populates them. Returns ``True`` when a real multi-rank group is active afterwards.
+    """
+    world_size = int(os.environ.get("WORLD_SIZE", "1"))
+    if world_size <= 1:
+        return False
+    if not dist.is_available():
+        logging.warning("WORLD_SIZE=%s but torch.distributed is unavailable; running single-device.", world_size)
+        return False
+    if dist.is_initialized():
+        return True
+
+    rank = int(os.environ.get("RANK", "0"))
+    local_rank = int(os.environ.get("LOCAL_RANK", "0"))
+
+    use_cuda = torch.cuda.is_available()
+    if use_cuda:
+        # Bind the device BEFORE init so the NCCL backend and current_device() agree per rank.
+        torch.cuda.set_device(local_rank)
+    backend = "nccl" if use_cuda else "gloo"
+
+    dist.init_process_group(
+        backend=backend,
+        rank=rank,
+        world_size=world_size,
+        timeout=timedelta(seconds=timeout_seconds),
+    )
+    logging.info(
+        "distributed initialised: backend=%s rank=%s/%s local_rank=%s device=%s",
+        backend,
+        rank,
+        world_size,
+        local_rank,
+        f"cuda:{local_rank}" if use_cuda else "cpu",
+    )
+    return True
+
+
+def teardown_distributed() -> None:
+    """Destroy the process group if one was initialised. Safe to call unconditionally."""
+    if dist.is_available() and dist.is_initialized():
+        dist.barrier()
+        dist.destroy_process_group()
 
 
 def is_distributed() -> bool:

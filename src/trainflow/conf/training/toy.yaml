@@ -17,7 +17,7 @@
 #   # Gradient accumulation / clipping
 #   PYTHONPATH=src python -m trainflow.train training=toy trainflow.trainer.gradient_accumulation_steps=4 trainflow.trainer.gradient_clip_val=1.0
 #
-#   # DDP (requires torchrun / distributed init outside trainer)
+#   # DDP: just launch with torchrun; the process group is initialised automatically.
 #   PYTHONPATH=src torchrun --nproc_per_node=2 -m trainflow.train training=toy trainflow.trainer.strategy=ddp
 #
 #   # Larger toy dataset

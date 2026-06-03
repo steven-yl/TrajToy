@@ -140,6 +140,10 @@ def _print_runtime_env(trainer: Any) -> None:
         trainer: 已构造好的 ``Trainer`` 实例,需要其暴露
             ``device`` / ``precision`` / ``precision_plugin`` / ``strategy`` 等字段。
     """
+    # Only the global-zero rank prints; under DDP the other ranks would otherwise interleave
+    # duplicate blocks into the same log file.
+    if not trainer.strategy.is_global_zero:
+        return
     py_ver = sys.version.split()[0]
     torch_ver = torch.__version__
     os_info = f"{platform.system()} {platform.release()} ({platform.machine()})"
@@ -219,6 +223,12 @@ def _print_module_parameter_summary(
         bytes_ = sum(p.numel() * p.element_size() for p in params)
         return total, trainable, bytes_
 
+    # Restrict to global-zero so the summary is logged once under DDP.
+    from trainflow._rank_zero import is_global_zero as _is_global_zero
+
+    if not _is_global_zero():
+        return
+
     def _line(prefix: str, label: str, total: int, trainable: int, bytes_: int) -> str:
         mib = bytes_ / (1024**2)
         return (
@@ -265,74 +275,99 @@ def run_fit(cfg: DictConfig) -> None:
     """Instantiate trainflow and run ``fit``. Resume when ``resume_checkpoint`` is set or
     ``auto_load_checkpoint`` is true with ``checkpoint_path``.
     """
-    logging.info("start train...")
-    _maybe_seed(cfg)
-    trainer, model, datamodule = instantiate_trainflow(cfg)
-    _print_runtime_env(trainer)
-    if isinstance(model, nn.Module):
-        _print_module_parameter_summary(model)
-    ckpt = fit_resume_checkpoint_path(cfg)
-    if ckpt is None:
-        trainer.fit(model, datamodule)
-        return
-    strict, weights_only = resolve_strict_weights_only(cfg)
-    trainer.fit(
-        model,
-        datamodule,
-        ckpt_path=ckpt,
-        ckpt_strict=strict,
-        ckpt_weights_only=weights_only,
-    )
-    logging.info("train done!")
+    from trainflow.distributed import setup_distributed, teardown_distributed
+
+    setup_distributed()
+    try:
+        logging.info("start train...")
+        _maybe_seed(cfg)
+        trainer, model, datamodule = instantiate_trainflow(cfg)
+        _print_runtime_env(trainer)
+        if isinstance(model, nn.Module):
+            _print_module_parameter_summary(model)
+        ckpt = fit_resume_checkpoint_path(cfg)
+        if ckpt is None:
+            trainer.fit(model, datamodule)
+            return
+        strict, weights_only = resolve_strict_weights_only(cfg)
+        trainer.fit(
+            model,
+            datamodule,
+            ckpt_path=ckpt,
+            ckpt_strict=strict,
+            ckpt_weights_only=weights_only,
+        )
+        logging.info("train done!")
+    finally:
+        teardown_distributed()
 
 def run_validate(cfg: DictConfig) -> None:
-    logging.info("start validate...")
-    trainer, model, datamodule = instantiate_trainflow(cfg)
-    _print_runtime_env(trainer)
-    trainer.model = model
-    if isinstance(model, nn.Module):
-        _print_module_parameter_summary(model)
-    trainer.datamodule = datamodule
-    ckpt = _select_resume_checkpoint(cfg)
-    if ckpt is None:
-        raise ValueError("Missing config key `resume_checkpoint` (required for validate).")
-    strict, weights_only = resolve_strict_weights_only(cfg)
-    trainer.load_checkpoint(ckpt, strict=strict, weights_only=weights_only)
-    metrics = trainer.validate()
-    logging.info("validate done!")
-    return metrics
+    from trainflow.distributed import setup_distributed, teardown_distributed
+
+    setup_distributed()
+    try:
+        logging.info("start validate...")
+        trainer, model, datamodule = instantiate_trainflow(cfg)
+        _print_runtime_env(trainer)
+        trainer.model = model
+        if isinstance(model, nn.Module):
+            _print_module_parameter_summary(model)
+        trainer.datamodule = datamodule
+        ckpt = _select_resume_checkpoint(cfg)
+        if ckpt is None:
+            raise ValueError("Missing config key `resume_checkpoint` (required for validate).")
+        strict, weights_only = resolve_strict_weights_only(cfg)
+        trainer.load_checkpoint(ckpt, strict=strict, weights_only=weights_only)
+        metrics = trainer.validate()
+        logging.info("validate done!")
+        return metrics
+    finally:
+        teardown_distributed()
 
 
 def run_test(cfg: DictConfig) -> None:
-    logging.info("start test...")
-    trainer, model, datamodule = instantiate_trainflow(cfg)
-    _print_runtime_env(trainer)
-    trainer.model = model
-    if isinstance(model, nn.Module):
-        _print_module_parameter_summary(model)
-    trainer.datamodule = datamodule
-    ckpt = _select_resume_checkpoint(cfg)
-    if ckpt is None:
-        raise ValueError("Missing config key `resume_checkpoint` (required for test).")
-    strict, weights_only = resolve_strict_weights_only(cfg)
-    trainer.load_checkpoint(ckpt, strict=strict, weights_only=weights_only)
-    metrics = trainer.test()
-    logging.info("test done!")
-    return metrics
+    from trainflow.distributed import setup_distributed, teardown_distributed
+
+    setup_distributed()
+    try:
+        logging.info("start test...")
+        trainer, model, datamodule = instantiate_trainflow(cfg)
+        _print_runtime_env(trainer)
+        trainer.model = model
+        if isinstance(model, nn.Module):
+            _print_module_parameter_summary(model)
+        trainer.datamodule = datamodule
+        ckpt = _select_resume_checkpoint(cfg)
+        if ckpt is None:
+            raise ValueError("Missing config key `resume_checkpoint` (required for test).")
+        strict, weights_only = resolve_strict_weights_only(cfg)
+        trainer.load_checkpoint(ckpt, strict=strict, weights_only=weights_only)
+        metrics = trainer.test()
+        logging.info("test done!")
+        return metrics
+    finally:
+        teardown_distributed()
+
 
 def run_predict(cfg: DictConfig) -> list[Any]:
-    logging.info("start predict...")
-    trainer, model, datamodule = instantiate_trainflow(cfg)
-    _print_runtime_env(trainer)
-    trainer.model = model
-    if isinstance(model, nn.Module):
-        _print_module_parameter_summary(model)
-    trainer.datamodule = datamodule
-    ckpt = _select_resume_checkpoint(cfg)
-    if ckpt is None:
-        raise ValueError("Missing config key `resume_checkpoint` (required for predict).")
-    strict, weights_only = resolve_strict_weights_only(cfg)
-    trainer.load_checkpoint(ckpt, strict=strict, weights_only=weights_only)
-    outputs = trainer.predict()
-    logging.info("predict done!")
-    return outputs
+    from trainflow.distributed import setup_distributed, teardown_distributed
+
+    setup_distributed()
+    try:
+        logging.info("start predict...")
+        trainer, model, datamodule = instantiate_trainflow(cfg)
+        _print_runtime_env(trainer)
+        trainer.model = model
+        if isinstance(model, nn.Module):
+            _print_module_parameter_summary(model)
+        trainer.datamodule = datamodule
+        ckpt = _select_resume_checkpoint(cfg)
+        if ckpt is None:
+            raise ValueError("Missing config key `resume_checkpoint` (required for predict).")
+        strict, weights_only = resolve_strict_weights_only(cfg)
+        trainer.load_checkpoint(ckpt, strict=strict, weights_only=weights_only)
+        outputs = trainer.predict()
+        logging.info("predict done!")
+        return outputs
+    finally:
+        teardown_distributed()
