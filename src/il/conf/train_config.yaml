@@ -2,12 +2,13 @@ app:
   name: il
   selected_training: ${hydra:runtime.choices.training@_global_}_${run_mode}
   log_root: log
+  run_id: ${oc.env:RUN_ID,${now:%Y%m%d_%H%M%S}}
 
 hydra:
   run:
-    dir: ${app.log_root}/${app.name}_${app.selected_training}_${now:%Y%m%d_%H%M%S}
+    dir: ${app.log_root}/${app.name}_${app.selected_training}_${app.run_id}
   sweep:
-    dir: ${app.log_root}/${app.name}_multirun_runs_${now:%Y%m%d_%H%M%S}
+    dir: ${app.log_root}/${app.name}_multirun_runs_${app.run_id}
     subdir: ${hydra.job.num}
 
 defaults:

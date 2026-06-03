@@ -65,19 +65,19 @@ normalizer:
     #   mean: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
     #   std: [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
     # 道路点均为车体系 xy(m)；前方延伸通常大于横向摆动
-    centerline:
-      mean: [0.0, 0.0]
-      std: [35.0, 18.0]
-    left_boundary:
-      mean: [0.0, 0.0]
-      std: [35.0, 18.0]
-    right_boundary:
-      mean: [0.0, 0.0]
-      std: [35.0, 18.0]
-    # (..., D, N, 2) → 最后一维 2
-    lane_dividers:
-      mean: [0.0, 0.0]
-      std: [35.0, 18.0]
+    # centerline:
+    #   mean: [0.0, 0.0]
+    #   std: [35.0, 18.0]
+    # left_boundary:
+    #   mean: [0.0, 0.0]
+    #   std: [35.0, 18.0]
+    # right_boundary:
+    #   mean: [0.0, 0.0]
+    #   std: [35.0, 18.0]
+    # # (..., D, N, 2) → 最后一维 2
+    # lane_dividers:
+    #   mean: [0.0, 0.0]
+    #   std: [35.0, 18.0]
     # 沿路限速 m/s；mean≈60km/h 量级，std 覆盖城快/高速差异（宜日后用统计值替换）
     max_v:
       mean: [16.67]

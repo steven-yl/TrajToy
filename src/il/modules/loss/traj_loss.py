@@ -50,7 +50,11 @@ class TrajLoss(Loss):
         _loss = lambda p, t: F.mse_loss(p, t, reduction="none")
 
         pw_xy = _loss(pred[..., :2], target[..., :2]).sum(-1)       # (B, F)
-        pw_h = _loss(pred[..., 2:3], target[..., 2:3]).squeeze(-1)  # (B, F)
+        # heading 用角度环绕差（wrap 到 (-pi, pi]）再平方，避免 ±pi 跳变导致的错误大损失，
+        # 与模型输出 cos/sin->atan2 及 metrics 的处理保持一致。
+        h_diff = pred[..., 2] - target[..., 2]
+        h_wrapped = torch.atan2(torch.sin(h_diff), torch.cos(h_diff))
+        pw_h = h_wrapped ** 2                                       # (B, F)
         pw_v = _loss(pred[..., 3:4], target[..., 3:4]).squeeze(-1)  # (B, F)
         pw = pw_xy + pw_h + pw_v
 

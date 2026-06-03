@@ -17,6 +17,29 @@ tqdm_logger = logging.getLogger('tqdm_progress')
 _TQDM_OUT = TqdmLogger(tqdm_logger)
 
 
+def _progress_total_batches(trainer: Any, stage: str) -> int | None:
+    """Batch count for the dataloader this rank will iterate (matches ``Trainer`` loops).
+
+    Uses ``Trainer._prepare_dataloader`` so DDP ``DistributedSampler`` sharding is reflected in
+    ``total``. Single-device runs are unchanged.
+    """
+    dm = trainer.datamodule
+    if stage == "train":
+        if hasattr(dm, "set_epoch"):
+            dm.set_epoch(trainer.current_epoch)
+        raw = dm.train_dataloader()
+        prepared = trainer._prepare_dataloader(raw, shuffle=True, set_epoch=True)
+    elif stage == "val":
+        prepared = trainer._prepare_dataloader(dm.val_dataloader(), shuffle=False)
+    elif stage == "test":
+        prepared = trainer._prepare_dataloader(dm.test_dataloader(), shuffle=False)
+    elif stage == "predict":
+        prepared = trainer._prepare_dataloader(dm.predict_dataloader(), shuffle=False)
+    else:
+        raise ValueError(f"Unknown progress stage: {stage!r}")
+    return len(prepared) if hasattr(prepared, "__len__") else None
+
+
 class Callback:
     def on_fit_start(self, trainer: Any) -> None: ...
     def on_fit_end(self, trainer: Any) -> None: ...
@@ -269,8 +292,7 @@ class TrainProgressBar(Callback):
         except ImportError:  # pragma: no cover
             self._pbar = None
             return
-        dl = trainer.datamodule.train_dataloader()
-        total = len(dl) if hasattr(dl, "__len__") else None
+        total = _progress_total_batches(trainer, "train")
         self._pbar = tqdm(
             total=total,
             desc=f"train epoch {trainer.current_epoch}",
@@ -305,8 +327,7 @@ class ValidationProgressBar(Callback):
         except ImportError:  # pragma: no cover
             self._pbar = None
             return
-        dl = trainer.datamodule.val_dataloader()
-        total = len(dl) if hasattr(dl, "__len__") else None
+        total = _progress_total_batches(trainer, "val")
         self._pbar = tqdm(
             total=total,
             desc=f"val epoch {trainer.current_epoch}",
@@ -342,8 +363,7 @@ class TestProgressBar(Callback):
         except ImportError:  # pragma: no cover
             self._pbar = None
             return
-        dl = trainer.datamodule.test_dataloader()
-        total = len(dl) if hasattr(dl, "__len__") else None
+        total = _progress_total_batches(trainer, "test")
         self._pbar = tqdm(
             total=total,
             desc=f"test epoch {trainer.current_epoch}",
@@ -381,8 +401,7 @@ class PredictProgressBar(Callback):
         except ImportError:  # pragma: no cover
             self._pbar = None
             return
-        dl = trainer.datamodule.predict_dataloader()
-        total = len(dl) if hasattr(dl, "__len__") else None
+        total = _progress_total_batches(trainer, "predict")
         self._pbar = tqdm(
             total=total,
             desc=f"predict epoch {trainer.current_epoch}",

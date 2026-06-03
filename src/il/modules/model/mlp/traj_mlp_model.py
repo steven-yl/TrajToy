@@ -71,8 +71,10 @@ class TrajMlpModel(nn.Module):
         self.xy_head = nn.Sequential(
             nn.Linear(hidden, hidden), nn.GELU(), nn.Linear(hidden, 2),
         )
+        # heading 预测 (cos, sin) 单位向量，再用 atan2 转回角度，
+        # 避免直接回归角度时 ±π 处的跳变与不连续问题。
         self.heading_head = nn.Sequential(
-            nn.Linear(hidden, hidden), nn.GELU(), nn.Linear(hidden, 1),
+            nn.Linear(hidden, hidden), nn.GELU(), nn.Linear(hidden, 2),
         )
         self.velocity_head = nn.Sequential(
             nn.Linear(hidden, hidden), nn.GELU(), nn.Linear(hidden, 1),
@@ -126,7 +128,10 @@ class TrajMlpModel(nn.Module):
         decoded = self.decoder(queries, memory, memory_key_padding_mask=enc_pad_mask)
 
         xy = self.xy_head(decoded)          # (B, F, 2)
-        heading = self.heading_head(decoded)  # (B, F, 1)
+        heading_vec = self.heading_head(decoded)  # (B, F, 2) -> (cos, sin)
+        # 归一化为单位向量后用 atan2 还原角度，范围 (-pi, pi]
+        heading_vec = nn.functional.normalize(heading_vec, dim=-1, eps=1e-6)
+        heading = torch.atan2(heading_vec[..., 1:2], heading_vec[..., 0:1])  # (B, F, 1)
         velocity = self.velocity_head(decoded)  # (B, F, 1)
 
         return torch.cat([xy, heading, velocity], dim=-1)  # (B, F, 4)
