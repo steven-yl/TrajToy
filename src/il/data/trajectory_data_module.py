@@ -7,6 +7,7 @@ from typing import Optional
 from torch.utils.data import ConcatDataset, DataLoader, Dataset, Subset
 
 from trainflow.data import DataModule
+from trainflow.seed import worker_init_fn as _seed_worker_init_fn
 import logging
 
 class TrajectoryDataModule(DataModule):
@@ -14,6 +15,9 @@ class TrajectoryDataModule(DataModule):
 
     构造时传入已配置好的 ``torch.utils.data.Dataset`` 实例（``data_set``），本模块仅负责
     ``dm_cfg_*``：划分比例与 DataLoader 参数。
+
+    分布式分片由 ``Trainer`` 统一处理（DDP 下自动注入 ``DistributedSampler`` 并 ``set_epoch``），
+    因此这里只构造普通 ``DataLoader``，无需感知分布式。
     """
 
     def __init__(
@@ -76,7 +80,11 @@ class TrajectoryDataModule(DataModule):
         logging.info(f" full_ds: {len(self._full_ds)}, train_ds: {len(self._train_ds)}, val_ds: {len(self._val_ds)}, test_ds: {len(self._test_ds)}")
 
     def _loader_kw(self) -> dict:
-        return {"num_workers": self._num_workers, "pin_memory": self._pin_memory}
+        return {
+            "num_workers": self._num_workers,
+            "pin_memory": self._pin_memory,
+            "worker_init_fn": _seed_worker_init_fn,
+        }
 
     def train_dataloader(self) -> DataLoader:
         self.setup(stage="fit")

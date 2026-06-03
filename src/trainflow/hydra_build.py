@@ -37,10 +37,22 @@ def resolve_strict_weights_only(cfg: DictConfig) -> tuple[bool, bool]:
     return bool(strict), bool(weights_only)
 
 
-def fit_resume_checkpoint_path(cfg: DictConfig) -> Any | None:
-    if bool(cfg.get("auto_load_checkpoint", False)):
-        return OmegaConf.select(cfg, "resume_checkpoint")
+def _select_resume_checkpoint(cfg: DictConfig) -> Any | None:
+    """Read the configured ``resume_checkpoint`` path (no gating). ``None`` when unset."""
     return OmegaConf.select(cfg, "resume_checkpoint")
+
+
+def fit_resume_checkpoint_path(cfg: DictConfig) -> Any | None:
+    """Resume checkpoint path for ``fit``, or ``None`` when not resuming.
+
+    ``auto_load_checkpoint`` gates resumption: when false (default), ``fit`` starts fresh even if a
+    ``resume_checkpoint`` value is present; when true, the configured ``resume_checkpoint`` is used.
+    Eval/predict entrypoints bypass this gate via :func:`_select_resume_checkpoint` since a
+    checkpoint is mandatory there.
+    """
+    if not bool(cfg.get("auto_load_checkpoint", False)):
+        return None
+    return _select_resume_checkpoint(cfg)
 
 
 def instantiate_trainer_and_model(cfg: DictConfig) -> tuple[Any, Any]:
@@ -126,7 +138,7 @@ def _print_runtime_env(trainer: Any) -> None:
 
     Args:
         trainer: 已构造好的 ``Trainer`` 实例,需要其暴露
-            ``device`` / ``precision`` / ``scaler`` / ``strategy`` 等字段。
+            ``device`` / ``precision`` / ``precision_plugin`` / ``strategy`` 等字段。
     """
     py_ver = sys.version.split()[0]
     torch_ver = torch.__version__
@@ -162,12 +174,14 @@ def _print_runtime_env(trainer: Any) -> None:
     elif precision in {"bf16", "bf16-mixed"}:
         amp_mode = "bf16-mixed"
 
+    grad_scaler_enabled = getattr(trainer.precision_plugin, "scaler", None) is not None
+
     logging.info("=== TrainFlow runtime ===")
     logging.info(f"  python : {py_ver}  |  torch : {torch_ver}  |  os : {os_info}")
     logging.info(f"  device : {device_desc}")
     logging.info(
         f"  precision : {precision}  |  autocast : {amp_mode}  "
-        f"|  grad_scaler : {trainer.scaler.is_enabled()}"
+        f"|  grad_scaler : {grad_scaler_enabled}"
     )
     logging.info(
         f"  strategy : {trainer.strategy.__class__.__name__}  "
@@ -234,11 +248,25 @@ def _print_module_parameter_summary(
     _walk(module, depth=0, indent="  ")
 
 
+def _maybe_seed(cfg: DictConfig) -> None:
+    """Seed all RNGs when a ``seed`` is configured (top-level or under ``trainflow``)."""
+    seed = OmegaConf.select(cfg, "seed")
+    if seed is None:
+        seed = OmegaConf.select(cfg, "trainflow.seed")
+    if seed is None:
+        return
+    from trainflow.seed import seed_everything
+
+    seed_everything(int(seed))
+    logging.info(f"seeded everything with seed={int(seed)}")
+
+
 def run_fit(cfg: DictConfig) -> None:
     """Instantiate trainflow and run ``fit``. Resume when ``resume_checkpoint`` is set or
     ``auto_load_checkpoint`` is true with ``checkpoint_path``.
     """
     logging.info("start train...")
+    _maybe_seed(cfg)
     trainer, model, datamodule = instantiate_trainflow(cfg)
     _print_runtime_env(trainer)
     if isinstance(model, nn.Module):
@@ -265,7 +293,7 @@ def run_validate(cfg: DictConfig) -> None:
     if isinstance(model, nn.Module):
         _print_module_parameter_summary(model)
     trainer.datamodule = datamodule
-    ckpt = fit_resume_checkpoint_path(cfg)
+    ckpt = _select_resume_checkpoint(cfg)
     if ckpt is None:
         raise ValueError("Missing config key `resume_checkpoint` (required for validate).")
     strict, weights_only = resolve_strict_weights_only(cfg)
@@ -283,7 +311,7 @@ def run_test(cfg: DictConfig) -> None:
     if isinstance(model, nn.Module):
         _print_module_parameter_summary(model)
     trainer.datamodule = datamodule
-    ckpt = fit_resume_checkpoint_path(cfg)
+    ckpt = _select_resume_checkpoint(cfg)
     if ckpt is None:
         raise ValueError("Missing config key `resume_checkpoint` (required for test).")
     strict, weights_only = resolve_strict_weights_only(cfg)
@@ -300,7 +328,7 @@ def run_predict(cfg: DictConfig) -> list[Any]:
     if isinstance(model, nn.Module):
         _print_module_parameter_summary(model)
     trainer.datamodule = datamodule
-    ckpt = fit_resume_checkpoint_path(cfg)
+    ckpt = _select_resume_checkpoint(cfg)
     if ckpt is None:
         raise ValueError("Missing config key `resume_checkpoint` (required for predict).")
     strict, weights_only = resolve_strict_weights_only(cfg)

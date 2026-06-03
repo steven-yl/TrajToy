@@ -23,6 +23,10 @@ class Strategy(ABC):
     def reduce_metrics(self, metrics: dict[str, float]) -> dict[str, float]:
         return metrics
 
+    def reduce_bool_any(self, value: bool) -> bool:
+        """Return True if ``value`` is True on any rank (no-op single-device)."""
+        return value
+
     def no_sync_context(self, model: torch.nn.Module):
         return nullcontext()
 
@@ -56,6 +60,16 @@ class DDPStrategy(Strategy):
             dist.all_reduce(tensor, op=dist.ReduceOp.SUM)
             reduced[key] = float(tensor.item() / world_size)
         return reduced
+
+    def reduce_bool_any(self, value: bool) -> bool:
+        if not dist.is_available() or not dist.is_initialized():
+            return value
+        tensor = torch.tensor(
+            1 if value else 0,
+            device="cuda" if torch.cuda.is_available() else "cpu",
+        )
+        dist.all_reduce(tensor, op=dist.ReduceOp.MAX)
+        return bool(tensor.item())
 
     def no_sync_context(self, model: torch.nn.Module):
         if isinstance(model, DistributedDataParallel):

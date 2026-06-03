@@ -45,13 +45,13 @@ trainflow:
     callbacks:
       - _target_: trainflow.callbacks.ModelCheckpoint
         dirpath: ${hydra:runtime.output_dir}/checkpoint
-        monitor: val_loss
+        monitor: val/loss
         mode: min
         save_top_k: 2
         filename: "{epoch:03d}-{step:08d}.ckpt"
 
       - _target_: trainflow.callbacks.EarlyStopping
-        monitor: val_loss
+        monitor: val/loss
         mode: min
         patience: 5
         min_delta: 0.0

@@ -1,6 +1,6 @@
 # Composable TrainFlow: trainer / model / data split into Hydra config groups.
 defaults:
-  - trainflow_trainer@trainflow.trainer: default
-  - trainflow_model@trainflow.model: toy
-  - trainflow_data@trainflow.data: toy
+  - /trainflow_trainer@trainflow.trainer: default
+  - /trainflow_model@trainflow.model: toy
+  - /trainflow_data@trainflow.data: toy
   - _self_

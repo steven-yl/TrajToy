@@ -93,6 +93,8 @@ class TrajVisualizationCallback(Callback):
             self._collected_samples.append(sample_data)
 
     def on_validation_epoch_end(self, trainer: Any) -> None:
+        if not trainer.strategy.is_global_zero:
+            return
         if not self._collected_samples:
             return
         if trainer.current_epoch % self._log_every_n_epochs != 0:
@@ -166,6 +168,8 @@ class HParamsCallback(Callback):
         self._logged = False
 
     def on_fit_end(self, trainer: Any) -> None:
+        if not trainer.strategy.is_global_zero:
+            return
         if self._logged:
             return
 
@@ -190,6 +194,8 @@ class TextCallback(Callback):
         self._text = str(text)
 
     def on_fit_start(self, trainer: Any) -> None:
+        if not trainer.strategy.is_global_zero:
+            return
         writer = get_tensorboard_writer(trainer)
         if writer is None:
             return

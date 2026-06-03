@@ -1,4 +1,4 @@
-_target_: frame.examples.toy.ToyDataModule
+_target_: trainflow.examples.toy.ToyDataModule
 n_train: 128
 n_val: 32
 batch_size: 16

@@ -12,7 +12,7 @@ compiler: false
 callbacks:
   - _target_: trainflow.callbacks.ModelCheckpoint
     dirpath: ${hydra:runtime.output_dir}/checkpoint
-    monitor: val_loss
+    monitor: val/loss
     mode: min
     save_top_k: 1
 logger:

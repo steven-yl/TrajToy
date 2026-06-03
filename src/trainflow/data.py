@@ -15,6 +15,13 @@ class DataModule(ABC):
     def setup(self, stage: Optional[str] = None) -> None:
         """Build datasets for a specific stage on every process."""
 
+    def set_epoch(self, epoch: int) -> None:
+        """Inform the data pipeline of the current epoch (e.g. for ``DistributedSampler``).
+
+        No-op by default; subclasses backed by a ``DistributedSampler`` override this to call
+        ``sampler.set_epoch(epoch)`` so shuffling varies correctly across epochs under DDP.
+        """
+
     @abstractmethod
     def train_dataloader(self) -> DataLoader:
         raise NotImplementedError
