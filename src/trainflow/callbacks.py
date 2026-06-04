@@ -496,3 +496,131 @@ class TimeMonitor(Callback):
             print(
                 f"[TimeMonitor] test epoch {trainer.current_epoch} took {elapsed:.2f}s"
             )
+
+
+class EMACallback(Callback):
+    """基于 ``torch_ema`` 的权重指数移动平均（Exponential Moving Average）。
+
+    封装 ``torch_ema.ExponentialMovingAverage``：每个 optimizer step 后调用 ``update()`` 维护影子
+    权重；在 validation / test / predict 期间用 ``store()`` + ``copy_to()`` 换入 EMA 权重，epoch
+    结束后 ``restore()`` 还原训练权重。影子权重通过 callback 的 ``state_dict`` 随 checkpoint 持久化，
+    因此 ``validate`` / ``test`` / ``predict`` / ``close_eval`` 等入口都会自动用上 EMA 权重。
+
+    注意事项：
+    - **回调顺序**：应将本回调放在 ``ModelCheckpoint`` 之后。验证 epoch 结束时 ModelCheckpoint
+      先保存（此时仍处于换入的 EMA 权重），随后本回调再 ``restore``，从而 checkpoint 存的是 EMA 权重。
+    - **续训**：保存的是 EMA 权重，从该 checkpoint 续训会以 EMA 平滑后的权重为训练起点，属常见取舍。
+    - 仅对需要梯度的浮点参数做 EMA（``torch_ema`` 默认行为）。
+
+    Args:
+        decay: 衰减系数，典型 0.999 ~ 0.9999；越大越平滑、跟随越慢。
+        use_num_updates: 是否启用 ``torch_ema`` 的 warmup（早期用 ``min(decay,(1+n)/(10+n))``），
+            训练初期让 EMA 更快跟上。
+        eval_with_ema: 评测/预测时是否换入 EMA 权重（关掉则只维护与保存，不参与评测）。
+    """
+
+    def __init__(
+        self,
+        decay: float = 0.999,
+        use_num_updates: bool = True,
+        eval_with_ema: bool = True,
+    ) -> None:
+        self.decay = float(decay)
+        self.use_num_updates = bool(use_num_updates)
+        self.eval_with_ema = bool(eval_with_ema)
+        self._ema: Any = None
+        self._swapped = False
+        self._pending_state: dict[str, Any] | None = None
+
+    # ------------------------------------------------------------------ utils
+
+    @staticmethod
+    def _target_module(trainer: Any) -> torch.nn.Module:
+        """EMA 作用的真实模块（兼容 ``torch.compile`` / DDP，取未包装的内层模块）。"""
+        return trainer._unwrap_model_for_state_dict()
+
+    def _ema_params(self, trainer: Any):
+        return (p for p in self._target_module(trainer).parameters() if p.requires_grad)
+
+    def _ensure_ema(self, trainer: Any) -> None:
+        if self._ema is not None:
+            return
+        from torch_ema import ExponentialMovingAverage
+
+        self._ema = ExponentialMovingAverage(
+            self._ema_params(trainer),
+            decay=self.decay,
+            use_num_updates=self.use_num_updates,
+        )
+        # 续训：恢复此前保存的影子权重（在 EMA 构造完成后回填）。
+        if self._pending_state is not None:
+            self._ema.load_state_dict(self._pending_state)
+            self._pending_state = None
+
+    # -------------------------------------------------------------- ema update
+
+    def on_fit_start(self, trainer: Any) -> None:
+        self._ensure_ema(trainer)
+
+    @torch.no_grad()
+    def on_after_optimizer_step(self, trainer: Any) -> None:
+        self._ensure_ema(trainer)
+        self._ema.update(self._ema_params(trainer))
+
+    # --------------------------------------------------------- weight swapping
+
+    @torch.no_grad()
+    def _swap_in_ema(self, trainer: Any) -> None:
+        if not self.eval_with_ema or self._ema is None or self._swapped:
+            return
+        params = list(self._ema_params(trainer))
+        self._ema.store(params)
+        self._ema.copy_to(params)
+        self._swapped = True
+
+    @torch.no_grad()
+    def _swap_out_ema(self, trainer: Any) -> None:
+        if not self._swapped or self._ema is None:
+            return
+        self._ema.restore(self._ema_params(trainer))
+        self._swapped = False
+
+    def on_validation_epoch_start(self, trainer: Any) -> None:
+        self._swap_in_ema(trainer)
+
+    def on_validation_epoch_end(self, trainer: Any) -> None:
+        self._swap_out_ema(trainer)
+
+    def on_test_epoch_start(self, trainer: Any) -> None:
+        self._swap_in_ema(trainer)
+
+    def on_test_epoch_end(self, trainer: Any) -> None:
+        self._swap_out_ema(trainer)
+
+    def on_predict_epoch_start(self, trainer: Any) -> None:
+        self._swap_in_ema(trainer)
+
+    def on_predict_epoch_end(self, trainer: Any) -> None:
+        self._swap_out_ema(trainer)
+
+    def on_exception(self, trainer: Any, exception: BaseException) -> None:
+        # 异常中断时若仍处于换入状态，先还原训练权重，避免落盘成不一致状态。
+        self._swap_out_ema(trainer)
+
+    # ----------------------------------------------------------- persistence
+
+    def state_dict(self) -> dict[str, Any]:
+        if self._ema is None:
+            # 尚未构造（例如 fit 之前），透传待恢复状态。
+            return {"ema": self._pending_state} if self._pending_state is not None else {}
+        return {"ema": self._ema.state_dict()}
+
+    def load_state_dict(self, state_dict: dict[str, Any]) -> None:
+        ema_state = state_dict.get("ema")
+        if ema_state is None:
+            return
+        if self._ema is not None:
+            self._ema.load_state_dict(ema_state)
+        else:
+            # EMA 尚未构造（评测/续训早期）：暂存，待 _ensure_ema 时回填。
+            self._pending_state = ema_state

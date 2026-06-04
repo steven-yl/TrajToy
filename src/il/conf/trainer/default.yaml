@@ -16,6 +16,10 @@ callbacks:
     mode: epoch
     save_top_k: 1
     every_n_epochs: 5
+  - _target_: trainflow.callbacks.EMACallback
+    decay: 0.999
+    use_num_updates: true
+    eval_with_ema: true
   - _target_: trainflow.callbacks.TrainProgressBar
     leave: true
   - _target_: trainflow.callbacks.ValidationProgressBar
