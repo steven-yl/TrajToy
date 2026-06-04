@@ -1,7 +1,8 @@
 _target_: il.modules.model.diffusion.conditional_UNet1D_model.ConditionalUNet1D
 _convert_: all
 
-prediction_state_dim: 4
+# 扩散通道：[x, y, v]（heading 不参与扩散，由后处理从 xy 路径切线推出）。
+prediction_state_dim: 3
 future_len: 25
 time_embed_dim: 128
 scene_embed_dim: 128
@@ -11,6 +12,6 @@ down_dims:
   - 128
 history_state_dim: 7
 road_feature_dim: 2
-history_len: 10
+history_len: 5
 road_points: 60
 dropout: 0.1
