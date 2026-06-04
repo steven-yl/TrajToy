@@ -239,3 +239,123 @@ class StateClsEncoder(nn.Module):
         scene_embedding = transformer_output[:, 0, :]
         
         return scene_embedding
+
+
+class StateTokenEncoder(nn.Module):
+    """将历史轨迹与道路几何编码为 **完整 token 序列**（含 padding mask），供 cross-attention 使用。
+
+    与 :class:`StateClsEncoder` 的区别：后者用一个 [CLS] token 把整个场景压成单个向量
+    （信息瓶颈），本类则保留每条 token（历史点、中心线/边界/分隔线逐点、限速）的逐 token 表征，
+    让下游 U-Net 通过 cross-attention 直接 attend 到道路几何细节。
+
+    Returns (forward):
+        memory: (B, S, hidden) 融合后的场景 token 序列。
+        key_padding_mask: (B, S) bool，``True`` 表示该位置为 padding（与
+            ``nn.MultiheadAttention`` / ``nn.TransformerEncoder`` 约定一致）。
+    """
+
+    def __init__(
+        self,
+        history_state_dim: int,
+        road_feature_dim: int,
+        hidden_dim: int,
+        dropout: float,
+        history_len: int,
+        road_points: int,
+        num_heads: int = 4,
+        num_layers: int = 2,
+    ) -> None:
+        super().__init__()
+        hidden = int(hidden_dim)
+
+        self.history_proj = nn.Linear(int(history_state_dim), hidden)
+        self.centerline_proj = nn.Linear(int(road_feature_dim), hidden)
+        self.left_boundary_proj = nn.Linear(int(road_feature_dim), hidden)
+        self.right_boundary_proj = nn.Linear(int(road_feature_dim), hidden)
+        self.lane_dividers_proj = nn.Linear(int(road_feature_dim), hidden)
+        self.speed_proj = nn.Linear(2, hidden)
+
+        self.history_pe = PositionalEncoding(hidden, max_len=int(history_len) + 1, dropout=float(dropout))
+        self.road_pe = PositionalEncoding(hidden, max_len=int(road_points), dropout=float(dropout))
+
+        # 类型嵌入 (0=centerline, 1=left, 2=right, 3=divider, 4=speed_token, 5=history)
+        self.type_emb = nn.Embedding(6, hidden)
+
+        transformer_layer = nn.TransformerEncoderLayer(
+            d_model=hidden,
+            nhead=int(num_heads),
+            dim_feedforward=hidden * 4,
+            dropout=float(dropout),
+            activation="gelu",
+            batch_first=True,
+        )
+        self.transformer = nn.TransformerEncoder(transformer_layer, num_layers=int(num_layers))
+
+    def forward(
+        self, state_dict: Dict[str, torch.Tensor]
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        history = state_dict["history"]
+        history_mask = state_dict["history_mask"]
+        centerline = state_dict["centerline"]
+        centerline_mask = state_dict["centerline_mask"]
+        left_boundary = state_dict["left_boundary"]
+        left_boundary_mask = state_dict["left_boundary_mask"]
+        right_boundary = state_dict["right_boundary"]
+        right_boundary_mask = state_dict["right_boundary_mask"]
+        lane_dividers = state_dict["lane_dividers"]
+        lane_dividers_mask = state_dict["lane_dividers_mask"]
+        max_v = state_dict["max_v"]
+        max_v_mask = state_dict["max_v_mask"]
+
+        B = history.shape[0]
+        device = history.device
+        n_road = centerline.shape[1]
+
+        history_emb = self.history_pe(self.history_proj(history)) + self.type_emb(
+            torch.full((B, history.shape[1]), 5, dtype=torch.long, device=device)
+        )
+
+        cl_emb = self.road_pe(self.centerline_proj(centerline)) + self.type_emb(
+            torch.zeros(B, n_road, dtype=torch.long, device=device)
+        )
+        lb_emb = self.road_pe(self.left_boundary_proj(left_boundary)) + self.type_emb(
+            torch.ones(B, n_road, dtype=torch.long, device=device)
+        )
+        rb_emb = self.road_pe(self.right_boundary_proj(right_boundary)) + self.type_emb(
+            torch.full((B, n_road), 2, dtype=torch.long, device=device)
+        )
+
+        D = lane_dividers.size(1)
+        N = lane_dividers.size(2)
+        ld_flat = lane_dividers.reshape(B, D * N, -1)
+        ld_emb = self.lane_dividers_proj(ld_flat).reshape(B, D, N, -1)
+        for d in range(D):
+            ld_emb[:, d] = self.road_pe(ld_emb[:, d])
+        ld_emb = ld_emb.reshape(B, D * N, -1) + self.type_emb(
+            torch.full((B, D * N), 3, dtype=torch.long, device=device)
+        )
+
+        speed_token = torch.stack([max_v, max_v_mask], dim=-1)  # (B, n_road, 2)
+        speed_emb = self.speed_proj(speed_token) + self.type_emb(
+            torch.full((B, n_road), 4, dtype=torch.long, device=device)
+        )
+
+        full_enc_input = torch.cat(
+            [history_emb, cl_emb, lb_emb, rb_emb, ld_emb, speed_emb], dim=1
+        )
+        enc_mask = torch.cat(
+            [
+                history_mask,
+                centerline_mask,
+                left_boundary_mask,
+                right_boundary_mask,
+                lane_dividers_mask.reshape(B, D * N),
+                max_v_mask,
+            ],
+            dim=1,
+        )
+        # True = padding position
+        key_padding_mask = enc_mask == 0
+
+        memory = self.transformer(src=full_enc_input, src_key_padding_mask=key_padding_mask)
+        return memory, key_padding_mask
