@@ -23,4 +23,8 @@ run_mode: train
 # 固定随机种子以保证可复现（权重初始化 / 数据增强 / 扩散加噪与采样）。
 seed: 42
 
-resume_checkpoint: null
+# auto_load_checkpoint: true
+# strict: true
+# weights_only: true
+# resume_checkpoint: log/il_train_traj_diffusion_train_20260608_150613/checkpoint/final.ckpt
+msg: null

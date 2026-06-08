@@ -30,7 +30,6 @@ def _run_mode(cfg: DictConfig) -> str:
 
 @hydra.main(version_base=None, config_path="conf", config_name="train_config")
 def main(cfg: DictConfig) -> None:
-    logging.info(OmegaConf.to_yaml(cfg))
     mode = _run_mode(cfg)
     if mode in ["train", "validate", "test", "predict"]:
         # TrainFlow 期望 trainflow 位于传入的 cfg 根节点；Hydra 使用 training@ 打包时常为 cfg.training
