@@ -18,16 +18,68 @@ import torch
 import torch.nn as nn
 from einops import rearrange
 
-from il.modules.model.diffusion.model import Attention
-from il.modules.model.diffusion.model_dit import (
-    CondSequential,
-    DiTBlock,
-    ModulatedLayerNorm,
-    Modulation,
-)
 from il.modules.model.utils.embedding_block import SinusoidalTimeEmbedding
 from il.modules.model.utils.state_encoder import StateClsEncoder, StateTokenEncoder
 
+
+class CondSequential(nn.Sequential):
+    def forward(self, x, cond):
+        for module in self._modules.values():
+            x = module(x, cond)
+        return x
+
+class Modulation(nn.Module):
+    def __init__(self, dim, n):
+        super().__init__()
+        self.n = n
+        self.proj = nn.Sequential(nn.SiLU(), nn.Linear(dim, n * dim, bias=True))
+        nn.init.constant_(self.proj[-1].weight, 0)
+        nn.init.constant_(self.proj[-1].bias, 0)
+
+    def forward(self, y):
+        return [m.unsqueeze(1) for m in self.proj(y).chunk(self.n, dim=1)]
+
+class ModulatedLayerNorm(nn.LayerNorm):
+    def __init__(self, dim, **kwargs):
+        super().__init__(dim, **kwargs)
+        self.modulation = Modulation(dim, 2)
+    def forward(self, x, y):
+        scale, shift = self.modulation(y)
+        return super().forward(x) * (1 + scale) + shift
+
+
+class Attention(nn.Module):
+    def __init__(self, head_dim, num_heads=8, qkv_bias=False):
+        super().__init__()
+        self.num_heads = num_heads
+        self.head_dim = head_dim
+        dim = head_dim * num_heads
+        self.qkv = nn.Linear(dim, dim * 3, bias=qkv_bias)
+        self.proj = nn.Linear(dim, dim)
+
+    def forward(self, x):
+        # (B, N, D) -> (B, N, D)
+        # N = H * W / patch_size**2, D = num_heads * head_dim
+        q, k, v = rearrange(self.qkv(x), 'b n (qkv h k) -> qkv b h n k',
+                            h=self.num_heads, k=self.head_dim)
+        x = rearrange(F.scaled_dot_product_attention(q, k, v),
+                      'b h n k -> b n (h k)')
+        return self.proj(x)
+
+class DiTBlock(nn.Module):
+    def __init__(self, head_dim, num_heads, mlp_ratio=4.0):
+        super().__init__()
+        dim = head_dim * num_heads
+        mlp_hidden_dim = int(dim * mlp_ratio)
+        self.norm1 = ModulatedLayerNorm(dim, elementwise_affine=False, eps=1e-6)
+        self.attn = Attention(head_dim, num_heads=num_heads, qkv_bias=True)
+        self.norm2 = ModulatedLayerNorm(dim, elementwise_affine=False, eps=1e-6)
+        self.mlp = nn.Sequential(
+                nn.Linear(dim, mlp_hidden_dim, bias=True),
+                nn.GELU(approximate="tanh"),
+                nn.Linear(mlp_hidden_dim, dim, bias=True),
+        )
+        self.scale_modulation = Modulation(dim, 2)
 
 class PatchEmbed1D(nn.Module):
     """将 (B, C, L) 轨迹按 patch 切分并投影为 token 序列 (B, N, D)。"""
@@ -79,7 +131,6 @@ def unpatchify_1d(
         c=channels,
         n=seq_len // patch_size,
     )
-
 
 class CrossAttnDiTBlock(nn.Module):
     """DiT block + cross-attention 注入场景 token（时间步仍通过 adaLN 调制）。"""
