@@ -27,4 +27,4 @@ seed: 42
 # strict: true
 # weights_only: true
 # resume_checkpoint: log/il_train_traj_diffusion_train_20260608_150613/checkpoint/final.ckpt
-msg: null
+task_msg: null

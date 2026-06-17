@@ -64,6 +64,8 @@ show_help() {
   RUN_ID=exp01 ${0} --nproc 8 train 2 trainflow.trainer.max_epochs=50
   ${0} train 2 model@trainflow.model=traj_diffusers_trainable_model
 
+训练时会在启动前提示输入 task_msg（任务描述，可回车跳过），以 Hydra 覆盖 task_msg=... 写入配置。
+
 多卡说明:
   NPROC>1 时使用: torchrun --nproc_per_node=N -m il.train ... trainflow.trainer.strategy=ddp
   并在启动前 export RUN_ID，避免各 rank 因 Hydra now 跨秒生成多个 log 目录。
@@ -85,9 +87,47 @@ ensure_run_id() {
   echo "RUN_ID=${RUN_ID} (auto, shared by all ranks)"
 }
 
+_hydra_has_task_msg() {
+  local arg
+  for arg in "$@"; do
+    [[ "${arg}" == task_msg=* ]] && return 0
+  done
+  return 1
+}
+
+# 训练前交互输入 task_msg，追加为 Hydra 覆盖 task_msg="..."
+ensure_task_msg() {
+  TASK_MSG=""
+  if _hydra_has_task_msg "$@"; then
+    return
+  fi
+  if [[ -t 0 ]]; then
+    read -r -p "任务描述 task_msg（可选，直接回车跳过）: " TASK_MSG || true
+    if [[ -n "${TASK_MSG}" ]]; then
+      echo "task_msg=${TASK_MSG}"
+    fi
+  fi
+}
+
+# 将 task_msg 追加为 Hydra 参数覆盖（task_msg="..."）
+append_task_msg_override() {
+  local -n _args=$1
+  if _hydra_has_task_msg "${_args[@]}"; then
+    return
+  fi
+  if [[ -z "${TASK_MSG:-}" ]]; then
+    return
+  fi
+  local safe="${TASK_MSG//\"/\\\"}"
+  _args+=("task_msg=\"${safe}\"")
+}
+
 # 启动 il.train：单卡 python 或多卡 torchrun + DDP
 launch_il_train() {
   local -a hydra_args=("$@")
+
+  ensure_task_msg "${hydra_args[@]}"
+  append_task_msg_override hydra_args
 
   if [[ "${NPROC}" -gt 1 ]]; then
     ensure_run_id

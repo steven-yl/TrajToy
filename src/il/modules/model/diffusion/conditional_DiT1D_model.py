@@ -16,11 +16,12 @@ from typing import Any, Dict
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from einops import rearrange
 
 from il.modules.model.utils.embedding_block import SinusoidalTimeEmbedding
 from il.modules.model.utils.state_encoder import StateClsEncoder, StateTokenEncoder
-
+from il.modules.model.utils.time_encoder import TimeEncoder
 
 class CondSequential(nn.Sequential):
     def forward(self, x, cond):
@@ -80,6 +81,14 @@ class DiTBlock(nn.Module):
                 nn.Linear(mlp_hidden_dim, dim, bias=True),
         )
         self.scale_modulation = Modulation(dim, 2)
+
+    def forward(self, x, y):
+        # (B, N, D), (B, D) -> (B, N, D)
+        # N = H * W / patch_size**2, D = num_heads * head_dim
+        gate_msa, gate_mlp = self.scale_modulation(y)
+        x = x + gate_msa * self.attn(self.norm1(x, y))
+        x = x + gate_mlp * self.mlp(self.norm2(x, y))
+        return x
 
 class PatchEmbed1D(nn.Module):
     """将 (B, C, L) 轨迹按 patch 切分并投影为 token 序列 (B, N, D)。"""
@@ -229,12 +238,7 @@ class ConditionalDiT1D(nn.Module):
         dim = int(head_dim) * int(num_heads)
         num_patches = self.future_len // self.patch_size
 
-        self.time_encoder = nn.Sequential(
-            SinusoidalTimeEmbedding(time_embed_dim),
-            nn.Linear(time_embed_dim, time_embed_dim),
-            nn.Mish(),
-            nn.Linear(time_embed_dim, time_embed_dim),
-        )
+        self.time_encoder = TimeEncoder(time_embed_dim)
         self.state_cls_encoder = StateClsEncoder(
             history_state_dim=history_state_dim,
             road_feature_dim=road_feature_dim,
@@ -326,12 +330,7 @@ class AttentionConditionalDiT1D(nn.Module):
         dim = int(head_dim) * int(num_heads)
         num_patches = self.future_len // self.patch_size
 
-        self.time_encoder = nn.Sequential(
-            SinusoidalTimeEmbedding(time_embed_dim),
-            nn.Linear(time_embed_dim, time_embed_dim),
-            nn.Mish(),
-            nn.Linear(time_embed_dim, time_embed_dim),
-        )
+        self.time_encoder = TimeEncoder(time_embed_dim)
         self.time_proj = nn.Sequential(
             nn.Linear(time_embed_dim, dim),
             nn.SiLU(),

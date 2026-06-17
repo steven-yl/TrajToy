@@ -51,6 +51,7 @@ callbacks:
       training: ${hydra:runtime.choices.training@_global_}
       model: ${trainflow.model._target_}
       run_mode: ${run_mode}
+      task_msg: ${task_msg}
 logger:
   - _target_: trainflow.loggers.CSVLogger
     save_dir: ${hydra:runtime.output_dir}/metrics

@@ -1,0 +1,22 @@
+_target_: il.modules.model.diffusion.conditional_dit1d_model.ConditionalDiT1D
+_convert_: all
+
+# 扩散通道：[x, y, v]（heading 不参与扩散，由后处理从 xy 路径切线推出）。
+prediction_state_dim: 3
+future_len: 25
+history_state_dim: 7
+road_feature_dim: 2
+history_len: 5
+road_points: 60
+dropout: 0.1
+
+time_embed_dim: 16
+
+state_encoder_hidden_dim: 128
+state_encoder_num_heads: 4
+state_encoder_layers: 4
+
+dit_hidden_dim: 64
+dit_num_heads: 4
+dit_mlp_ratio: 4.0
+dit_depth: 4

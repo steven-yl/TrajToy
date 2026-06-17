@@ -264,6 +264,7 @@ class StateTokenEncoder(nn.Module):
         road_points: int,
         num_heads: int = 4,
         num_layers: int = 2,
+        output_dim: [int, None] = None,
     ) -> None:
         super().__init__()
         hidden = int(hidden_dim)
@@ -290,6 +291,10 @@ class StateTokenEncoder(nn.Module):
             batch_first=True,
         )
         self.transformer = nn.TransformerEncoder(transformer_layer, num_layers=int(num_layers))
+        if output_dim is not None:
+            self.traj_proj = nn.Linear(int(hidden), output_dim)
+        else:
+            self.traj_proj = None
 
     def forward(
         self, state_dict: Dict[str, torch.Tensor]
@@ -358,4 +363,7 @@ class StateTokenEncoder(nn.Module):
         key_padding_mask = enc_mask == 0
 
         memory = self.transformer(src=full_enc_input, src_key_padding_mask=key_padding_mask)
+        
+        if self.traj_proj is not None:
+            memory = self.traj_proj(memory)
         return memory, key_padding_mask
