@@ -1,4 +1,4 @@
-_target_: il.modules.model.diffusion.conditional_dit1d_model.ConditionalDiT1D
+_target_: il.modules.model.diffusion.conditional_dit_model.ConditionalDiT1D
 _convert_: all
 
 # 扩散通道：[x, y, v]（heading 不参与扩散，由后处理从 xy 路径切线推出）。

@@ -2,7 +2,7 @@ defaults:
   # - /modules/model@predictor.model: conditional_UNet1D_model
   # - /modules/model@predictor.model: conditional_UNet1D_model_atten
   # - /modules/model@predictor.model: conditional_DiT1D_model
-  - /modules/model@predictor.model: conditional_dit1d_model
+  - /modules/model@predictor.model: conditional_dit_model
   # - /modules/model@predictor.model: conditional_DiT1D_model_atten
   # - /modules/model@predictor.model: conditional_query_model
   - /modules/scheduler@predictor.noise_scheduler: ddim
