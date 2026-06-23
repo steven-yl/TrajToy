@@ -10,18 +10,52 @@ export PYTHONPATH="${REPO_ROOT}/src${PYTHONPATH:+:${PYTHONPATH}}"
 # GPU 进程数：1 = 单卡 python；>1 = torchrun + trainflow.trainer.strategy=ddp
 NPROC="${NPROC:-${IL_NPROC:-1}}"
 
+# 训练模式：序号 -> Hydra 覆盖（空格分隔）；新增模式只需改此处与 TRAIN_LABELS
+declare -A RUN_OPTIONS=(
+  [1]="training@_global_=train_traj_mlp"
+  [2]="training@_global_=train_traj_diffusion model@trainflow.model=traj_diffusers_trainable_model"
+  [3]="training@_global_=train_traj_diffusion model@trainflow.model=traj_diffusion_trainable_model"
+  [4]="training@_global_=train_traj_diffusion model@trainflow.model=traj_diffusers_trainable_model trainflow.model.predictor.num_inference_steps=50"
+  [5]="training@_global_=train_traj_diffusion model@trainflow.model=traj_diffusers_trainable_model trainflow.model.predictor.num_inference_steps=10"
+  [6]="training@_global_=train_traj_flow"
+)
+declare -A TRAIN_LABELS=(
+  [1]="MLP"
+  [2]="Diffusion (traj_diffusers_trainable_model)"
+  [3]="Diffusion (traj_diffusion_trainable_model)"
+  [4]="Diffusion (traj_diffusers, num_inference_steps=50)"
+  [5]="Diffusion (traj_diffusers, num_inference_steps=10)"
+  [6]="Flow (traj_flow_trainable_model)"
+)
+TRAIN_MODES=(1 2 3 4 5 6)
+CLOSE_EVAL_BASE=7
+SHOWCFG_CHOICE=10
+
+_train_mode_valid() {
+  [[ -n "${RUN_OPTIONS[$1]:-}" ]]
+}
+
+_train_modes_pattern() {
+  local IFS='|'
+  echo "${TRAIN_MODES[*]}"
+}
+
+_print_train_menu() {
+  local prefix="${1:-训练 - }"
+  local m
+  for m in "${TRAIN_MODES[@]}"; do
+    echo "  ${m}) ${prefix}${TRAIN_LABELS[$m]}"
+  done
+}
+
 show_menu() {
   cat <<EOF
 请选择运行模式 (当前 NPROC=${NPROC}):
-  1) 训练 - MLP
-  2) 训练 - Diffusion (traj_diffusers_trainable_model)
-  3) 训练 - Diffusion (traj_diffusion_trainable_model)
-  4) 训练 - Diffusion (traj_diffusers, num_inference_steps=50)
-  5) 训练 - Diffusion (traj_diffusers, num_inference_steps=10)
-  6) 闭环评估 - Diffusers (traj_diffusers_trainable_model)
-  7) 闭环评估 - Diffusion (traj_diffusion_trainable_model)
-  8) 闭环评估 - MLP
-  9) 查看训练配置 (--cfg job)
+$(_print_train_menu "训练 - ")
+  ${CLOSE_EVAL_BASE}) 闭环评估 - Diffusers (traj_diffusers_trainable_model)
+  $((CLOSE_EVAL_BASE + 1))) 闭环评估 - Diffusion (traj_diffusion_trainable_model)
+  $((CLOSE_EVAL_BASE + 2))) 闭环评估 - MLP
+  ${SHOWCFG_CHOICE}) 查看训练配置 (--cfg job)
   q) 退出
 
 多卡示例: NPROC=8 ${0} train 2
@@ -29,11 +63,15 @@ EOF
 }
 
 show_help() {
+  local m help_train=""
+  for m in "${TRAIN_MODES[@]}"; do
+    help_train+="  ${m}  ${TRAIN_LABELS[$m]}"$'\n'
+  done
   cat <<EOF
 用法:
   ${0}                      交互式选择
-  ${0} <序号>               直接运行 1-9
-  ${0} train [1-5] [Hydra 覆盖...]   训练
+  ${0} <序号>               直接运行 1-${SHOWCFG_CHOICE}
+  ${0} train [$(_train_modes_pattern)] [Hydra 覆盖...]   训练
   ${0} close_eval [mlp|diffusion|diffusers]
   ${0} showcfg                打印训练 Hydra 配置
   ${0} -h                    显示帮助
@@ -48,12 +86,7 @@ show_help() {
                             （对应 train_config.yaml 中 app.run_id / oc.env:RUN_ID）
 
 训练子模式:
-  1  MLP
-  2  Diffusion + traj_diffusers_trainable_model
-  3  Diffusion + traj_diffusion_trainable_model
-  4  Diffusion + traj_diffusers_trainable_model, num_inference_steps=50
-  5  Diffusion + traj_diffusers_trainable_model, num_inference_steps=10
-
+${help_train}
 闭环评估:
   close_eval diffusers | diffusion | mlp
 
@@ -72,10 +105,12 @@ show_help() {
 EOF
 }
 
+
 run_cmd() {
   echo ">>> $*"
   "$@"
 }
+
 
 ensure_run_id() {
   if [[ -n "${RUN_ID:-}" ]]; then
@@ -138,45 +173,16 @@ launch_il_train() {
   fi
 }
 
-train_hydra_args_for_mode() {
-  local mode="$1"
-  case "${mode}" in
-    1)
-      echo "training@_global_=train_traj_mlp"
-      ;;
-    2)
-      echo "training@_global_=train_traj_diffusion"
-      echo "model@trainflow.model=traj_diffusers_trainable_model"
-      ;;
-    3)
-      echo "training@_global_=train_traj_diffusion"
-      echo "model@trainflow.model=traj_diffusion_trainable_model"
-      ;;
-    4)
-      echo "training@_global_=train_traj_diffusion"
-      echo "model@trainflow.model=traj_diffusers_trainable_model"
-      echo "trainflow.model.predictor.num_inference_steps=50"
-      ;;
-    5)
-      echo "training@_global_=train_traj_diffusion"
-      echo "model@trainflow.model=traj_diffusers_trainable_model"
-      echo "trainflow.model.predictor.num_inference_steps=10"
-      ;;
-    *)
-      echo "无效训练模式: ${mode}（请输入 1-5）" >&2
-      return 1
-      ;;
-  esac
-}
-
 run_train_mode() {
   local mode="$1"
   shift || true
-  local -a hydra_args=()
-  local line
-  while IFS= read -r line; do
-    hydra_args+=("${line}")
-  done < <(train_hydra_args_for_mode "${mode}")
+  local opts="${RUN_OPTIONS[$mode]:-}"
+  if [[ -z "${opts}" ]]; then
+    echo "无效训练模式: ${mode}（请输入 $(_train_modes_pattern)）" >&2
+    return 1
+  fi
+  local -a hydra_args
+  read -ra hydra_args <<< "${opts}"
   hydra_args+=("$@")
   launch_il_train "${hydra_args[@]}"
 }
@@ -204,51 +210,47 @@ run_showcfg() {
 }
 
 run_choice() {
-  case "$1" in
-    1|2|3|4|5)
-      run_train_mode "$1" "${@:2}"
-      ;;
-    6)
+  local choice="$1"
+  if _train_mode_valid "${choice}"; then
+    run_train_mode "${choice}" "${@:2}"
+    return
+  fi
+  case "${choice}" in
+    "${CLOSE_EVAL_BASE}")
       run_close_eval diffusers
       ;;
-    7)
+    $((CLOSE_EVAL_BASE + 1)))
       run_close_eval diffusion
       ;;
-    8)
+    $((CLOSE_EVAL_BASE + 2)))
       run_close_eval mlp
       ;;
-    9)
+    "${SHOWCFG_CHOICE}")
       run_showcfg
       ;;
     *)
-      echo "无效序号: $1（请输入 1-9）" >&2
+      echo "无效序号: ${choice}（请输入 1-${SHOWCFG_CHOICE}）" >&2
       return 1
       ;;
   esac
 }
 
 pick_train_mode_interactive() {
-  cat <<EOF
-请选择训练模式 (NPROC=${NPROC}):
-  1) MLP
-  2) Diffusion (traj_diffusers_trainable_model)
-  3) Diffusion (traj_diffusion_trainable_model)
-  4) Diffusion (traj_diffusers, num_inference_steps=50)
-  5) Diffusion (traj_diffusers, num_inference_steps=10)
-  q) 退出
-EOF
+  echo "请选择训练模式 (NPROC=${NPROC}):"
+  _print_train_menu ""
+  echo "  q) 退出"
   while true; do
-    read -r -p "请输入序号 [1-5/q]: " choice
+    read -r -p "请输入序号 [$(_train_modes_pattern)/q]: " choice
     case "${choice}" in
       q|Q)
         echo "已取消。"
         exit 0
         ;;
-      1|2|3|4|5)
-        run_train_mode "${choice}"
-        return
-        ;;
       *)
+        if _train_mode_valid "${choice}"; then
+          run_train_mode "${choice}"
+          return
+        fi
         echo "无效输入，请重新输入。"
         ;;
     esac
@@ -258,17 +260,17 @@ EOF
 pick_mode_interactive() {
   show_menu
   while true; do
-    read -r -p "请输入序号 [1-9/q]: " choice
+    read -r -p "请输入序号 [1-${SHOWCFG_CHOICE}/q]: " choice
     case "${choice}" in
       q|Q)
         echo "已取消。"
         exit 0
         ;;
-      1|2|3|4|5|6|7|8|9)
-        run_choice "${choice}"
-        return
-        ;;
       *)
+        if _train_mode_valid "${choice}" || [[ "${choice}" =~ ^(${CLOSE_EVAL_BASE}|$((CLOSE_EVAL_BASE + 1))|$((CLOSE_EVAL_BASE + 2))|${SHOWCFG_CHOICE})$ ]]; then
+          run_choice "${choice}"
+          return
+        fi
         echo "无效输入，请重新输入。"
         ;;
     esac
@@ -323,12 +325,12 @@ main() {
       shift
       if [[ $# -eq 0 ]]; then
         pick_train_mode_interactive
-      elif [[ "$1" =~ ^[1-5]$ ]]; then
+      elif _train_mode_valid "$1"; then
         local mode="$1"
         shift
         run_train_mode "${mode}" "$@"
       else
-        echo "训练模式须为 1-5，收到: $1" >&2
+        echo "训练模式须为 $(_train_modes_pattern)，收到: $1" >&2
         exit 1
       fi
       ;;
@@ -338,13 +340,14 @@ main() {
     showcfg|cfg)
       run_showcfg
       ;;
-    1|2|3|4|5|6|7|8|9)
-      run_choice "$@"
-      ;;
     *)
-      echo "未知参数: $1" >&2
-      show_help >&2
-      exit 1
+      if _train_mode_valid "$1" || [[ "$1" =~ ^[0-9]+$ && "$1" -le "${SHOWCFG_CHOICE}" && "$1" -ge 1 ]]; then
+        run_choice "$@"
+      else
+        echo "未知参数: $1" >&2
+        show_help >&2
+        exit 1
+      fi
       ;;
   esac
 }

@@ -1,0 +1,12 @@
+
+defaults:
+  - /trainer@trainflow.trainer: default
+  - /data@trainflow.data: traj_diffusion_data
+  - /model@trainflow.model: traj_flow_trainable_model
+  - _self_
+
+run_mode: train # train, validate, test
+auto_load_checkpoint: false
+resume_checkpoint: null #log/il_train_mlp_traj_train_20260510_111242/checkpoint/104-00013440.ckpt
+strict: true
+weights_only: false

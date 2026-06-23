@@ -192,6 +192,25 @@ class DiT(nn.Module):
         )
         self.final_layer = FinalLayer(hidden_dim, output_dim)
 
+        self.initialize_weights()
+
+    def initialize_weights(self) -> None:
+        """adaLN-Zero 初始化：把所有 adaLN 调制分支与最终输出层置零，
+        使每个 DiTBlock 在训练初期为恒等映射（gate≈0），FinalLayer 初始输出 0，
+        显著提升深层 DiT 的训练稳定性（参见 Peebles & Xie, 2022）。"""
+        # 每个 block 的 adaLN modulation 最后一层（产出 shift/scale/gate）置零。
+        for block in self.blocks:
+            nn.init.zeros_(block.adaLN_modulation[-1].weight)
+            nn.init.zeros_(block.adaLN_modulation[-1].bias)
+
+        # FinalLayer 的 adaLN modulation 置零（初始 shift=0, scale=0 -> 恒等调制）。
+        nn.init.zeros_(self.final_layer.adaLN_modulation[-1].weight)
+        nn.init.zeros_(self.final_layer.adaLN_modulation[-1].bias)
+
+        # FinalLayer 的输出投影末层置零，使初始预测为 0。
+        nn.init.zeros_(self.final_layer.proj[-1].weight)
+        nn.init.zeros_(self.final_layer.proj[-1].bias)
+
     def forward(
         self,
         x: torch.Tensor,

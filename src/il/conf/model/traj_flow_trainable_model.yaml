@@ -1,0 +1,66 @@
+defaults:
+  # - /modules/model@predictor.model: conditional_UNet1D_model
+  # - /modules/model@predictor.model: conditional_UNet1D_model_atten
+  # - /modules/model@predictor.model: conditional_DiT1D_model
+  - /modules/model@predictor.model: conditional_dit_model
+  # - /modules/model@predictor.model: conditional_DiT1D_model_atten
+  # - /modules/model@predictor.model: conditional_query_model
+  - /modules/scheduler@predictor.flow_scheduler: flow_match_euler
+  - _self_
+
+
+_target_: il.model.traj_diffusers_trainable_model.TrajDiffusionTrainableModel
+_convert_: all
+
+# Optimizer & LR scheduler（TrainFlow 在每个 optimizer step 调用 scheduler.step()，步数均指更新步）。
+lr: 1.0e-3
+weight_decay: 1.0e-4
+# none | cosine | cosine_warmup（Linear warmup → Cosine）| step
+lr_scheduler: cosine_warmup
+cosine_t_max: 40000
+cosine_eta_min: 1.0e-5
+# cosine_warmup：warmup 步数；warmup 期内 lr 从 lr×warmup_start_factor 线性升到 lr。
+warmup_steps: 500
+warmup_start_factor: 1.0e-8
+# step：每隔 lr_step_size 步乘以 lr_gamma。
+lr_step_size: 30
+lr_gamma: 0.5
+
+
+# FlowMatchingPipeline + ConditionalDiT1D（与 conditional_dit_model.yaml 参数对齐）。
+predictor:
+  _target_: il.modules.utis.flow_core.FlowMatchingPipeline
+  # flow_scheduler: 由 defaults 定义
+  # predictor.model：由 defaults 中的 modules/model/conditional_dit_model.yaml 注入；此处可写覆盖项。
+  model:
+    history_len: 5
+    future_len: 25
+    road_points: 60
+
+  # Euler 积分步数：null 表示走 num_train_timesteps。
+  # 典型 10~50 步即可加速采样。
+  num_inference_steps: 10
+
+# TrajMetrics configuration.
+metrics_fn:
+  _target_: il.modules.metrics.traj_metrics.TrajMetrics
+  lon_fde_thresholds_m: [5.0, 15.0]
+
+loss_fn:
+  _target_: il.modules.loss.traj_loss.TrajLoss
+  cfg_ade_weight: 1.0
+  cfg_fde_weight: 1.0
+
+# 归一化（扁平键名与 batch 字段一致，由 Normalizer 读取）
+normalizer:
+  _target_: il.modules.utis.normalizer.Normalizer
+  parameters:
+    history:
+      mean: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+      std: [22.0, 12.0, 0.8, 12.0, 0.4, 3.0, 0.8]
+    future:
+      mean: [0.0, 0.0, 0.0, 0.0]
+      std: [22.0, 12.0, 0.8, 12.0]
+    max_v:
+      mean: [16.67]
+      std: [11.11]

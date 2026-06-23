@@ -15,6 +15,60 @@ from il.modules.utis.diffusion_core import DiffusionPipeline
 import logging
 
 
+class StatesProcess(object):
+    def __init__(self):
+        pass
+    # ------------------------------------------------------------------
+    # heading 角度量在欧氏扩散空间不连续（±π 跳变），用 sin/cos 参与扩散；
+    # 速度 v 与 xy 强相关，由后处理从 xy 位移推出，避免冗余建模：
+    #   future 4 维 [x, y, heading, v] -> 扩散 4 维 [x, y, sin(h), cos(h)]
+    # ------------------------------------------------------------------
+    FUTURE_STEP_DT = 0.2  # history_future_dt(0.1s) × future_interval(2)
+    @staticmethod
+    def _velocity_from_xy(xy: torch.Tensor, dt: float | None = None) -> torch.Tensor:
+        """由 xy 路径相邻位移推标量速度 (m/s)，``xy``: [..., F, 2] -> [..., F]。
+
+        与 ``_heading_from_xy`` 同样在前补原点，首点速度为「原点 -> 首点」位移 / dt。
+        """
+        if dt is None:
+            dt = StatesProcess.FUTURE_STEP_DT
+        origin = torch.zeros_like(xy[..., :1, :])
+        pts = torch.cat([origin, xy], dim=-2)          # [..., F+1, 2]
+        diff = pts[..., 1:, :] - pts[..., :-1, :]      # [..., F, 2]
+        return torch.linalg.vector_norm(diff, ord=2, dim=-1) / dt
+
+    @staticmethod
+    def postprocessXYHV(future3: torch.Tensor) -> torch.Tensor:
+        """[..., 4]=[x,y,sin(h),cos(h)] -> [..., 4]=[x,y,heading,v]（v 由 xy 位移推出）。"""
+        x = future3[..., 0]
+        y = future3[..., 1]
+        h = torch.atan2(future3[..., 2], future3[..., 3])
+        v = StatesProcess._velocity_from_xy(future3[..., :2])
+        return torch.stack([x, y, h, v], dim=-1)
+
+    @staticmethod
+    def preprocess(batch: dict[str, torch.Tensor]) -> dict[str, torch.Tensor]:
+        """把 future 编码为 4 维 [x,y,sin(h),cos(h)] 后再做归一化；其余条件字段照常归一化。
+
+        归一化的 future 字段使用 4 维 mean/std（见 normalizer 配置），
+        因此必须在 ``normalizer.apply`` 之前完成 4->4 编码。
+        """
+        enc = dict(batch)
+        future = batch["future"]
+        x = future[..., 0]
+        y = future[..., 1]
+        h = future[..., 2]
+        h_sin = torch.sin(h)
+        h_cos = torch.cos(h)
+
+        enc["future"] = torch.stack([x, y, h_sin, h_cos], dim=-1)
+        return enc # self.normalizer.apply(enc)
+
+    @staticmethod
+    def postprocess(sample3: torch.Tensor) -> torch.Tensor:
+        """采样输出（归一化 4 维）-> 反归一化 -> 解码为 4 维 [x,y,heading,v]。"""
+        return StatesProcess.postprocessXYHV(sample3) # self.normalizer.inverse_future(sample3))
+
 class TrajDiffusionTrainableModel(TrainableModel):
     def __init__(self,
             predictor: DiffusionPipeline,
@@ -67,68 +121,21 @@ class TrajDiffusionTrainableModel(TrainableModel):
             out["lr_scheduler"] = scheduler
         return out
 
-    # ------------------------------------------------------------------
-    # heading 角度量在欧氏扩散空间不连续（±π 跳变），干脆不让扩散建模 heading：
-    #   future 4 维 [x, y, heading, v] -> 扩散 3 维 [x, y, v]
-    # heading 在后处理中由预测的 xy 路径切线方向推出（局部车体系下 ego 位于原点、
-    # 朝向为 0，故首点 heading 用「原点 -> 首点」方向锚定）。
-    # ------------------------------------------------------------------
-    @staticmethod
-    def _encode_future(future: torch.Tensor) -> torch.Tensor:
-        """[..., 4]=[x,y,heading,v] -> [..., 3]=[x,y,v]（丢弃 heading，由后处理还原）。"""
-        x = future[..., 0]
-        y = future[..., 1]
-        v = future[..., 3]
-        return torch.stack([x, y, v], dim=-1)
-
-    @staticmethod
-    def _heading_from_xy(xy: torch.Tensor) -> torch.Tensor:
-        """由 xy 路径的有限差分切线方向推 heading，``xy``: [..., F, 2] -> [..., F]。
-
-        局部车体系下 ego 当前位于原点 (0,0)，朝向为 0，因此在序列前补一个原点，
-        使首个 future 点的 heading 用「原点 -> 首点」的位移方向锚定；其余点用相邻
-        前向差分。位移近零（停车）时 atan2(0,0)=0，与 ego 朝向一致，可接受。
-        """
-        origin = torch.zeros_like(xy[..., :1, :])
-        pts = torch.cat([origin, xy], dim=-2)          # [..., F+1, 2]
-        diff = pts[..., 1:, :] - pts[..., :-1, :]      # [..., F, 2]
-        return torch.atan2(diff[..., 1], diff[..., 0])  # [..., F]
-
-    def _decode_future(self, future3: torch.Tensor) -> torch.Tensor:
-        """[..., 3]=[x,y,v] -> [..., 4]=[x,y,heading,v]（heading 由 xy 切线推出）。"""
-        x = future3[..., 0]
-        y = future3[..., 1]
-        v = future3[..., 2]
-        heading = self._heading_from_xy(future3[..., :2])
-        return torch.stack([x, y, heading, v], dim=-1)
-
-    def _prepare(self, batch: dict[str, torch.Tensor]) -> dict[str, torch.Tensor]:
-        """把 future 编码为 3 维 [x,y,v] 后再做归一化；其余条件字段照常归一化。
-
-        归一化的 future 字段使用 3 维 mean/std（见 normalizer 配置），
-        因此必须在 ``normalizer.apply`` 之前完成 4->3 编码。
-        """
-        enc = dict(batch)
-        enc["future"] = self._encode_future(batch["future"])
-        return self.normalizer.apply(enc)
-
-    def _postprocess(self, sample3: torch.Tensor) -> torch.Tensor:
-        """采样输出（归一化 3 维）-> 反归一化 -> 解码为 4 维 [x,y,heading,v]。"""
-        return self._decode_future(self.normalizer.inverse_future(sample3))
-
     def forward(self, batch: dict[str, torch.Tensor]) -> dict[str, torch.Tensor]:
-        norm_batch = self._prepare(batch)
-        pred_noise, target_noise = self.predictor(norm_batch["future"], norm_batch)
-        loss = self.loss_fn(pred_noise, target_noise, batch["future_mask"])
+        norm_batch = self.normalizer.apply(batch)
+        norm_batch = StatesProcess.preprocess(norm_batch)
+        pred, target = self.predictor(norm_batch["future"], norm_batch)
+        loss = self.loss_fn(pred, target, norm_batch["future_mask"])
         return loss
 
     def validation_step(self, batch: dict[str, torch.Tensor]) -> dict[str, torch.Tensor]:
-        norm_batch = self._prepare(batch)
+        norm_batch = self.normalizer.apply(batch)
+        norm_batch = StatesProcess.preprocess(norm_batch)
         pred_future, x_samples, x_samples_timesteps = self.predictor.grid_sample(
             norm_batch, norm_batch["future"].shape,
         )
-        pred_future = self._postprocess(pred_future)
-        x_samples = [self._postprocess(x) for x in x_samples]
+        pred_future = self.normalizer.inverse_future(StatesProcess.postprocess(pred_future))
+        x_samples = [self.normalizer.inverse_future(StatesProcess.postprocess(x)) for x in x_samples]
 
         metrics = self.metrics_fn(pred_future, batch["future"], batch["future_mask"])
         out = {"pred_future": pred_future}
@@ -139,12 +146,13 @@ class TrajDiffusionTrainableModel(TrainableModel):
         return out
 
     def test_step(self, batch: dict[str, torch.Tensor]) -> dict[str, torch.Tensor]:
-        norm_batch = self._prepare(batch)
+        norm_batch = self.normalizer.apply(batch)
+        norm_batch = StatesProcess.preprocess(norm_batch)
         pred_future, x_samples, x_samples_timesteps = self.predictor.grid_sample(
             norm_batch, norm_batch["future"].shape,
         )
-        pred_future = self._postprocess(pred_future)
-        x_samples = [self._postprocess(x) for x in x_samples]
+        pred_future = self.normalizer.inverse_future(StatesProcess.postprocess(pred_future))
+        x_samples = [self.normalizer.inverse_future(StatesProcess.postprocess(x)) for x in x_samples]
 
         metrics = self.metrics_fn(pred_future, batch["future"], batch["future_mask"])
         out = {"pred_future": pred_future}
@@ -155,12 +163,13 @@ class TrajDiffusionTrainableModel(TrainableModel):
         return out
 
     def predict_step(self, batch: dict[str, torch.Tensor]) -> dict[str, torch.Tensor]:
-        norm_batch = self._prepare(batch)
+        norm_batch = self.normalizer.apply(batch)
+        norm_batch = StatesProcess.preprocess(norm_batch)
         pred_future, x_samples, x_samples_timesteps = self.predictor.grid_sample(
             norm_batch, norm_batch["future"].shape,
         )
-        pred_future = self._postprocess(pred_future)
-        x_samples = [self._postprocess(x) for x in x_samples]
+        pred_future = self.normalizer.inverse_future(StatesProcess.postprocess(pred_future)) # self._postprocess(pred_future)
+        x_samples = [self.normalizer.inverse_future(StatesProcess.postprocess(x)) for x in x_samples] # self._postprocess(x) for x in x_samples]
         out = {"pred_future": pred_future}
         out.update({"x_samples": x_samples, "x_samples_timesteps": x_samples_timesteps, "batch": batch})
         return out

@@ -28,6 +28,7 @@ class DiffusionProcess:
         noise_scheduler: SchedulerMixin,
         gt_sample: torch.Tensor,
         batch: dict[str, torch.Tensor],
+        prediction_type: str = "epsilon",
     ) -> tuple[torch.Tensor, torch.Tensor]:
         timesteps = torch.randint(
             0,
@@ -38,8 +39,15 @@ class DiffusionProcess:
         noisy_x0, target_noise = DiffusionProcess.q_sample(
             noise_scheduler, gt_sample, timesteps,
         )
-        pred_noise = model(noisy_x0, timesteps, batch)
-        return pred_noise, target_noise
+        pred = model(noisy_x0, timesteps, batch)
+        target = None
+        if prediction_type == "epsilon":
+            target = target_noise
+        elif prediction_type == "sample":
+            target = gt_sample   
+        else:
+            raise ValueError(f"Unsupported prediction_type: {prediction_type!r}.")
+        return pred, target
 
 
 class DiffusionSampler:
@@ -133,7 +141,7 @@ class DiffusionPipeline(nn.Module):
     ) -> tuple[torch.Tensor, torch.Tensor]:
         # 正向扩散训练:返回 ``(pred_noise, target_noise)``,外部接 loss。
         return DiffusionProcess.target_for_loss(
-            self.model, self.noise_scheduler, sample, batch,
+            self.model, self.noise_scheduler, sample, batch, prediction_type=self.noise_scheduler.config.prediction_type,
         )
 
     def sample(

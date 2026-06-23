@@ -46,9 +46,14 @@ metrics_fn:
   _target_: il.modules.metrics.traj_metrics.TrajMetrics
   lon_fde_thresholds_m: [5.0, 15.0]
 
-# DiffusionMSELoss configuration.
+# # DiffusionMSELoss configuration.
+# loss_fn:
+#   _target_: il.modules.loss.diffusion_loss.DiffusionMSELoss
+
 loss_fn:
-  _target_: il.modules.loss.diffusion_loss.DiffusionMSELoss
+  _target_: il.modules.loss.traj_loss.TrajLoss
+  cfg_ade_weight: 1.0
+  cfg_fde_weight: 1.0
 
 # 归一化（扁平键名与 batch 字段一致，由 Normalizer 读取）
 normalizer:
@@ -64,8 +69,8 @@ normalizer:
     # future 扩散通道为 [x, y, v]。
     # heading 不参与扩散（角度量在欧氏空间有 ±π 跳变），由后处理从预测 xy 路径切线推出。
     future:
-      mean: [0.0, 0.0, 0.0]
-      std: [22.0, 12.0, 12.0]
+      mean: [0.0, 0.0, 0.0, 0.0]
+      std: [22.0, 12.0, 0.8, 12.0]
     # vehicle_params:
     #   mean: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
     #   std: [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]

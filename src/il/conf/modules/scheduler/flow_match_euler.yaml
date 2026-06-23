@@ -1,0 +1,15 @@
+_target_: diffusers.FlowMatchEulerDiscreteScheduler
+num_train_timesteps: 1000
+# shift=1.0 为无额外时间偏移; 轨迹任务保持默认即可。
+shift: 1.0
+use_dynamic_shifting: false
+base_shift: 0.5
+max_shift: 1.15
+base_image_seq_len: 256
+max_image_seq_len: 4096
+invert_sigmas: false
+shift_terminal: null
+use_karras_sigmas: false
+use_exponential_sigmas: false
+use_beta_sigmas: false
+time_shift_type: exponential
