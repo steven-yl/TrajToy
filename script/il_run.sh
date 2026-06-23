@@ -29,7 +29,7 @@ declare -A TRAIN_LABELS=(
 )
 TRAIN_MODES=(1 2 3 4 5 6)
 CLOSE_EVAL_BASE=7
-SHOWCFG_CHOICE=10
+SHOWCFG_CHOICE=11
 
 _train_mode_valid() {
   [[ -n "${RUN_OPTIONS[$1]:-}" ]]
@@ -55,6 +55,7 @@ $(_print_train_menu "训练 - ")
   ${CLOSE_EVAL_BASE}) 闭环评估 - Diffusers (traj_diffusers_trainable_model)
   $((CLOSE_EVAL_BASE + 1))) 闭环评估 - Diffusion (traj_diffusion_trainable_model)
   $((CLOSE_EVAL_BASE + 2))) 闭环评估 - MLP
+  $((CLOSE_EVAL_BASE + 3))) 闭环评估 - Flow (traj_flow_trainable_model)
   ${SHOWCFG_CHOICE}) 查看训练配置 (--cfg job)
   q) 退出
 
@@ -72,7 +73,7 @@ show_help() {
   ${0}                      交互式选择
   ${0} <序号>               直接运行 1-${SHOWCFG_CHOICE}
   ${0} train [$(_train_modes_pattern)] [Hydra 覆盖...]   训练
-  ${0} close_eval [mlp|diffusion|diffusers]
+  ${0} close_eval [mlp|diffusion|diffusers|flow]
   ${0} showcfg                打印训练 Hydra 配置
   ${0} -h                    显示帮助
 
@@ -88,7 +89,7 @@ show_help() {
 训练子模式:
 ${help_train}
 闭环评估:
-  close_eval diffusers | diffusion | mlp
+  close_eval diffusers | diffusion | mlp | flow
 
 示例:
   ${0} train 1
@@ -198,8 +199,11 @@ run_close_eval() {
     diffusers)
       run_cmd python -m il.evaluation eval@_global_=close_eval_traj_diffusers
       ;;
+    flow)
+      run_cmd python -m il.evaluation eval@_global_=close_eval_traj_flow
+      ;;
     *)
-      echo "无效评估类型: $1（可用: mlp, diffusion, diffusers）" >&2
+      echo "无效评估类型: $1（可用: mlp, diffusion, diffusers, flow）" >&2
       return 1
       ;;
   esac
@@ -224,6 +228,9 @@ run_choice() {
       ;;
     $((CLOSE_EVAL_BASE + 2)))
       run_close_eval mlp
+      ;;
+    $((CLOSE_EVAL_BASE + 3)))
+      run_close_eval flow
       ;;
     "${SHOWCFG_CHOICE}")
       run_showcfg
@@ -267,7 +274,7 @@ pick_mode_interactive() {
         exit 0
         ;;
       *)
-        if _train_mode_valid "${choice}" || [[ "${choice}" =~ ^(${CLOSE_EVAL_BASE}|$((CLOSE_EVAL_BASE + 1))|$((CLOSE_EVAL_BASE + 2))|${SHOWCFG_CHOICE})$ ]]; then
+        if _train_mode_valid "${choice}" || [[ "${choice}" =~ ^(${CLOSE_EVAL_BASE}|$((CLOSE_EVAL_BASE + 1))|$((CLOSE_EVAL_BASE + 2))|$((CLOSE_EVAL_BASE + 3))|${SHOWCFG_CHOICE})$ ]]; then
           run_choice "${choice}"
           return
         fi

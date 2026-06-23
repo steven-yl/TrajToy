@@ -16,6 +16,8 @@ dependencies = [
     "einops",
     "gymnasium",
     "pygame",
+    "imageio>=2.34",
+    "imageio-ffmpeg>=0.5",
     "casadi",
     "matplotlib",
     "tqdm",

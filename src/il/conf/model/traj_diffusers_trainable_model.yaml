@@ -47,13 +47,13 @@ metrics_fn:
   lon_fde_thresholds_m: [5.0, 15.0]
 
 # # DiffusionMSELoss configuration.
-# loss_fn:
-#   _target_: il.modules.loss.diffusion_loss.DiffusionMSELoss
-
 loss_fn:
-  _target_: il.modules.loss.traj_loss.TrajLoss
-  cfg_ade_weight: 1.0
-  cfg_fde_weight: 1.0
+  _target_: il.modules.loss.diffusion_loss.DiffusionMSELoss
+
+# loss_fn:
+#   _target_: il.modules.loss.traj_loss.TrajLoss
+#   cfg_ade_weight: 1.0
+#   cfg_fde_weight: 1.0
 
 # 归一化（扁平键名与 batch 字段一致，由 Normalizer 读取）
 normalizer:

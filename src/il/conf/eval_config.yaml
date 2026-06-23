@@ -21,5 +21,8 @@ run_mode: close_eval
 # 固定随机种子以保证评测可复现（扩散采样初始噪声等）。
 seed: 42
 # resume_checkpoint: log/il_train_traj_mlp_train_20260530_104406/checkpoint/final.ckpt
-resume_checkpoint: log/il_train_traj_diffusion_train_20260601_084130/checkpoint/final.ckpt
-
+# resume_checkpoint: log/il_train_traj_mlp_train_20260623_225041/checkpoint/final.ckpt
+# resume_checkpoint: log/il_train_traj_diffusion_train_20260623_233742/checkpoint/final.ckpt
+# resume_checkpoint: log/il_train_traj_diffusion_train_20260624_001654/checkpoint/final.ckpt
+resume_checkpoint: log/il_train_traj_flow_train_20260624_004511/checkpoint/final.ckpt
+task_msg: null

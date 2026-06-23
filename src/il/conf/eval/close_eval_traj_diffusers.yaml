@@ -43,7 +43,11 @@ trainflow:
     render_width: 2000
     render_height: 1600
     render_scale: 10.0
-  
+    
+    save_video: true
+    video_path: null  # None 时每个 reset 在 video_dir 下自动生成
+    video_dir: "videos"
+
     random_init: true
     random_config:
       random_init_speed_range: [0.0, 10.0]

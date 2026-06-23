@@ -10,6 +10,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from pathlib import Path
+import time
 
 import numpy as np
 from omegaconf import DictConfig, OmegaConf
@@ -81,6 +83,11 @@ class EnvConfig:
     render_mode: str | None = None
     auto_render: bool = False
     render_fps: int = 30
+
+    # --- 视频保存：save_video=True 时在 render()/step() 中自动写入帧 ---
+    save_video: bool = False
+    video_path: str | None = None  # None 时每个 reset 在 video_dir 下自动生成
+    video_dir: str = "videos"
 
 class RoadVehicleEnv(gym.Env):
     """自动驾驶仿真环境。
@@ -169,6 +176,8 @@ class RoadVehicleEnv(gym.Env):
         self._seed = 0
         self._screen = None
         self._clock = None
+        self._video_writer = None
+        self._video_path_current: str | None = None
 
     @property
     def config(self) -> EnvConfig:
@@ -248,6 +257,11 @@ class RoadVehicleEnv(gym.Env):
 
         obs, road_info = self._get_obs_and_info()
         info = self._get_info() | road_info
+
+        if self._cfg.save_video:
+            self._start_video_recording(seed=seed, options=options)
+            self.render()
+
         return obs, info
 
     def step(self, action: np.ndarray):
@@ -295,7 +309,7 @@ class RoadVehicleEnv(gym.Env):
         info["lateral_offset"] = lateral
         info["heading_error"] = heading_err
         info["progress"] = progress
-        if self._cfg.auto_render:
+        if self._cfg.auto_render or (self._cfg.save_video and self._cfg.render_mode is None):
             self.render()
         return obs, float(reward), terminated, truncated, info
 
@@ -341,6 +355,54 @@ class RoadVehicleEnv(gym.Env):
         }
         return info
 
+    # ── 视频保存 ──────────────────────────────────────────────────
+
+    @property
+    def video_path_written(self) -> str | None:
+        """最近一次已完成或进行中的视频文件路径。"""
+        return self._video_path_current
+
+    def stop_video(self) -> str | None:
+        """结束当前视频录制并落盘。返回已写入的文件路径。"""
+        return self._finalize_video()
+
+    def _resolve_video_path(self, seed: int | None, options: dict | None) -> str:
+        if options and options.get("video_path"):
+            return str(options["video_path"])
+        if self._cfg.video_path:
+            return str(self._cfg.video_path)
+        video_dir = Path(self._cfg.video_dir)
+        video_dir.mkdir(parents=True, exist_ok=True)
+        seed_part = f"seed{seed}" if seed is not None else "noseed"
+        ts = int(time.time() * 1000)
+        return str(video_dir / f"episode_{seed_part}_{ts}.mp4")
+
+    def _start_video_recording(self, *, seed: int | None, options: dict | None) -> None:
+        self._finalize_video()
+        path = self._resolve_video_path(seed, options)
+        try:
+            import imageio.v2 as imageio
+        except ImportError as exc:
+            raise ImportError(
+                "save_video=True 需要 imageio，请安装: pip install imageio imageio-ffmpeg",
+            ) from exc
+
+        Path(path).parent.mkdir(parents=True, exist_ok=True)
+        self._video_writer = imageio.get_writer(path, fps=int(self._cfg.render_fps))
+        self._video_path_current = path
+
+    def _append_video_frame(self, frame: np.ndarray) -> None:
+        if self._video_writer is None:
+            return
+        self._video_writer.append_data(np.asarray(frame, dtype=np.uint8))
+
+    def _finalize_video(self) -> str | None:
+        path = self._video_path_current
+        if self._video_writer is not None:
+            self._video_writer.close()
+            self._video_writer = None
+        return path
+
     # ── 渲染 ──────────────────────────────────────────────────────
 
     def render(
@@ -356,7 +418,7 @@ class RoadVehicleEnv(gym.Env):
                 {"points": ndarray(M,2), "color": (R,G,B), "width": int,
                  "style": "solid"/"dashed"/"dots", "label": str}
         """
-        if self._cfg.render_mode is None:
+        if self._cfg.render_mode is None and not self._cfg.save_video:
             return None
         try:
             import pygame
@@ -494,15 +556,20 @@ class RoadVehicleEnv(gym.Env):
                 surf.blit(txt, (10, 10 + j * (font.get_height() + 2)))
 
         self._screen.blit(surf, (0, 0))
+        frame = np.transpose(
+            np.array(pygame.surfarray.pixels3d(self._screen)), axes=(1, 0, 2),
+        )
+        if self._cfg.save_video:
+            self._append_video_frame(frame)
+
         if self._cfg.render_mode == "human":
             pygame.event.pump()
             self._clock.tick(int(self._cfg.render_fps))
             pygame.display.flip()
             return None
-        else:
-            return np.transpose(
-                np.array(pygame.surfarray.pixels3d(self._screen)), axes=(1, 0, 2),
-            )
+        if self._cfg.render_mode == "rgb_array":
+            return frame
+        return None
 
     def close(self, wait: float = 0.0):
         """关闭环境和渲染窗口。
@@ -510,6 +577,8 @@ class RoadVehicleEnv(gym.Env):
         Args:
             wait: 关闭前等待秒数（期间保持窗口响应）
         """
+        self._finalize_video()
+
         if self._screen is not None:
             import pygame
             import time
